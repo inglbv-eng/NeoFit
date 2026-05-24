@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NeoFit ERP - Acceso Premium</title>
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="img/icon.png">
+  <link rel="shortcut icon" type="image/png" href="img/icon.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"
+  />
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      overflow-x: hidden;
+      font-family: "Inter", sans-serif;
+      background: #050505;
+    }
+
+    .bg-gym {
+      background:
+        linear-gradient(
+          to right,
+          rgba(0,0,0,.82),
+          rgba(0,0,0,.68)
+        ),
+        url('https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=1600&auto=format&fit=crop');
+
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+
+    .glass {
+      background: rgba(10,10,10,.68);
+      backdrop-filter: blur(18px);
+      border: 1px solid rgba(255,255,255,.06);
+      box-shadow: 0 10px 40px rgba(0,0,0,.45);
+    }
+
+    .fade-up {
+      animation: fadeUp .9s ease;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(35px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .hero-title {
+      line-height: .95;
+    }
+
+    .logo-glow {
+  filter:
+    drop-shadow(0 0 10px rgba(14,165,233,.45))
+    drop-shadow(0 0 25px rgba(14,165,233,.35))
+    drop-shadow(0 0 45px rgba(14,165,233,.25));
+}
+
+.logo-float {
+  animation: floatLogo 3s ease-in-out infinite;
+}
+
+@keyframes floatLogo {
+
+  0% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
+
+  100% {
+    transform: translateY(0px);
+  }
+
+}
+
+    .input-style {
+      width: 100%;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.08);
+      color: white;
+      border-radius: 18px;
+      padding: 12px 16px;
+      transition: .3s ease;
+    }
+
+    .input-style:focus {
+      outline: none;
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 4px rgba(56,189,248,.12);
+      transform: scale(1.01);
+    }
+
+    .btn-login {
+      background: linear-gradient(
+        135deg,
+        #0ea5e9,
+        #2563eb
+      );
+
+      transition: .3s ease;
+      box-shadow: 0 10px 30px rgba(37,99,235,.35);
+    }
+
+    .btn-login:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 15px 40px rgba(37,99,235,.45);
+    }
+
+    .card-hover {
+      transition: .3s ease;
+    }
+
+    .card-hover:hover {
+      transform: translateY(-4px);
+      border-color: rgba(56,189,248,.35);
+    }
+
+    @media (max-width: 1024px) {
+
+      .hero-left {
+        display: none;
+      }
+
+      .mobile-logo {
+        display: flex !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gym h-screen overflow-hidden text-white">
+  <div class="h-screen grid lg:grid-cols-2">
+    <!-- HERO -->
+    <div class="hero-left flex flex-col justify-between p-10 xl:p-12 overflow-hidden fade-up">
+
+      <!-- TOP -->
+      <div>
+
+        <div class="flex items-center gap-4">
+
+          <!-- ICON -->
+          <img
+            src="img/icon.png"
+            alt="NeoFit Icon"
+            class="w-16 h-16 object-contain logo-glow"
+          />
+
+          <div>
+            <h1 class="text-3xl font-black tracking-wide">
+              NeoFit ERP
+            </h1>
+
+            <p class="text-zinc-300 text-sm">
+              Sistema Inteligente para Gimnasios
+            </p>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- CENTER -->
+      <div class="max-w-xl">
+
+        <p class="text-sky-400 uppercase tracking-[4px] font-semibold mb-5">
+          Plataforma Fitness Premium
+        </p>
+
+        <h2 class="hero-title text-6xl font-black mb-6">
+          Gestiona tu
+          gimnasio como
+          una marca PRO.
+        </h2>
+
+        <p class="text-zinc-300 text-lg leading-relaxed mb-8">
+          Control de membresías, pagos, usuarios,
+          estadísticas y administración completa
+          en una sola plataforma moderna.
+        </p>
+
+        <!-- FEATURES -->
+        <div class="flex flex-wrap gap-4">
+
+          <div class="glass card-hover rounded-2xl px-5 py-4 flex items-center gap-3">
+            <i class="fas fa-chart-line text-sky-400"></i>
+            <span>Dashboard Inteligente</span>
+          </div>
+
+          <div class="glass card-hover rounded-2xl px-5 py-4 flex items-center gap-3">
+            <i class="fas fa-users text-sky-400"></i>
+            <span>Control de Miembros</span>
+          </div>
+
+          <div class="glass card-hover rounded-2xl px-5 py-4 flex items-center gap-3">
+            <i class="fas fa-wallet text-sky-400"></i>
+            <span>Pagos y Membresías</span>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- FOOTER -->
+      <div class="text-zinc-500 text-sm">
+        © 2026 NeoFit ERP · Premium Gym System
+      </div>
+    </div>
+
+  <!-- LOGIN -->
+<div class="flex items-center justify-center p-4 md:p-6 fade-up overflow-hidden">
+
+  <div class="glass w-full max-w-[430px] rounded-[28px] p-6 md:p-7">
+
+    <!-- MOBILE LOGO -->
+    <div class="mobile-logo hidden items-center justify-center mb-4">
+      <img
+        src="img/icon.png"
+        alt="NeoFit Icon"
+        class="w-14 h-14 object-contain logo-glow"
+      />
+    </div>
+
+    <!-- LOGO -->
+    <div class="text-center mb-6">
+
+      <img
+        src="img/logo.png"
+        alt="NeoFit Logo"
+        class="w-32 h-32 xl:w-36 xl:h-36 object-contain mx-auto logo-float logo-glow animate-pulse mb-3"
+      />
+
+      <h2 class="text-3xl font-black mb-1">
+        Bienvenido
+      </h2>
+
+      <p class="text-zinc-400 text-sm">
+        Accede a tu plataforma fitness
+      </p>
+
+    </div>
+
+    <!-- FORM -->
+    <form id="smartLoginForm" class="space-y-4">
+
+      <!-- USER -->
+      <div>
+
+        <label class="block text-zinc-400 text-sm mb-2">
+          Email o usuario
+        </label>
+
+        <input
+          type="text"
+          id="loginIdentifier"
+          placeholder="admin@neofit.com"
+          class="input-style h-[56px]"
+        />
+
+      </div>
+
+      <!-- PASSWORD -->
+      <div>
+
+        <label class="block text-zinc-400 text-sm mb-2">
+          Contraseña
+        </label>
+
+        <div class="relative">
+
+          <input
+            type="password"
+            id="loginPassword"
+            placeholder="••••••••"
+            class="input-style h-[56px] pr-14"
+          />
+
+          <button
+            type="button"
+            id="togglePassword"
+            class="absolute right-5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition"
+          >
+            <i class="fas fa-eye-slash text-lg"></i>
+          </button>
+
+        </div>
+
+      </div>
+
+      <!-- BUTTON -->
+      <button
+        type="submit"
+        class="btn-login w-full h-[58px] rounded-2xl font-bold text-base"
+      >
+        <i class="fas fa-arrow-right-to-bracket mr-2"></i>
+        Ingresar al sistema
+      </button>
+
+    </form>
+
+    <!-- BOTTOM -->
+    <div class="mt-5 flex items-center justify-center gap-5 text-zinc-500 text-xs">
+
+      <div class="flex items-center gap-2">
+        <i class="fas fa-shield-halved text-sky-400"></i>
+        <span>Seguro</span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <i class="fas fa-bolt text-sky-400"></i>
+        <span>Rápido</span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <i class="fas fa-mobile-screen text-sky-400"></i>
+        <span>Responsive</span>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+  </div>
+
+  <!-- SCRIPT PASSWORD -->
+  <script>
+
+    const togglePassword =
+      document.getElementById('togglePassword');
+
+    const passwordInput =
+      document.getElementById('loginPassword');
+
+    togglePassword.addEventListener('click', () => {
+
+      const type =
+        passwordInput.getAttribute('type') === 'password'
+        ? 'text'
+        : 'password';
+
+      passwordInput.setAttribute('type', type);
+
+      togglePassword.innerHTML =
+        type === 'password'
+        ? '<i class=\"fas fa-eye-slash text-lg\"></i>'
+        : '<i class=\"fas fa-eye text-lg\"></i>';
+
+    });
+
+  </script>
+
+  <!-- SUPABASE -->
+  <script src="supabase-config.js"></script>
+  <script src="smart-login.js"></script>
+
+</body>
+</html>

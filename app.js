@@ -1,3 +1,26 @@
+// ============ VERIFICACIÓN DE ADMIN (NUEVO - PONER AL INICIO) ============
+(function checkAdminAccess() {
+  const userRole = localStorage.getItem('userRole');
+  const user = localStorage.getItem('user');
+  
+  if (!userRole || userRole !== 'admin' || !user) {
+    console.log('🔒 Acceso denegado - Redirigiendo a login');
+    window.location.href = 'login.html';
+    return;
+  }
+  
+  try {
+    const userData = JSON.parse(user);
+    if (userData.email !== 'admin@neofit.com') {
+      localStorage.removeItem('userRole');
+      localStorage.removeItem('user');
+      window.location.href = 'login.html';
+    }
+  } catch (e) {
+    window.location.href = 'login.html';
+  }
+})();
+
 // app.js - NeoFit ERP Complete System (VERSIÓN PROFESIONAL CON PERFIL COMPLETO)
 let currentUser = null;
 let allMembers = [];
@@ -111,6 +134,7 @@ async function login(email, password) {
     
     currentUser = data.user;
     localStorage.setItem('user', JSON.stringify(currentUser));
+    localStorage.setItem('userRole', 'admin');  // ← NUEVO: guardar rol
     showMainApp();
     await loadDashboardData();
     await loadMembers();
@@ -131,12 +155,11 @@ function logout() {
   if (client) client.auth.signOut();
   currentUser = null;
   localStorage.removeItem('user');
-  document.getElementById('loginScreen').classList.remove('hidden');
-  document.getElementById('mainApp').classList.add('hidden');
-  if (html5QrCode) {
-    html5QrCode.stop().catch(console.log);
-  }
-  showToast('Sesión cerrada correctamente');
+  localStorage.removeItem('userRole');
+  localStorage.removeItem('neofit_client');
+  
+  // Redirigir directamente al login.html
+  window.location.href = 'login.html';
 }
 
 function setupPasswordToggle() {
@@ -159,8 +182,22 @@ function setupPasswordToggle() {
   });
 }
 
+function showMainApp() {
+  // El loginScreen ya no existe o está oculto permanentemente
+  const loginScreen = document.getElementById('loginScreen');
+  if (loginScreen) loginScreen.classList.add('hidden');
+  document.getElementById('mainApp').classList.remove('hidden');
+}
+
 function checkAuth() {
   const user = localStorage.getItem('user');
+  const userRole = localStorage.getItem('userRole');
+  
+  // Si no hay usuario o no es admin, redirigir a login
+  if (!user || userRole !== 'admin') {
+    window.location.href = 'login.html';
+    return;
+  }
   
   if (!window.supabaseReady()) {
     window.onSupabaseReady(() => {
@@ -168,6 +205,8 @@ function checkAuth() {
         currentUser = JSON.parse(localStorage.getItem('user'));
         showMainApp();
         initializeAppData();
+      } else {
+        window.location.href = 'login.html';
       }
     });
     return;
@@ -189,11 +228,6 @@ async function initializeAppData() {
   startQRScanner();
   loadSavedView();
   showToast('Datos cargados correctamente');
-}
-
-function showMainApp() {
-  document.getElementById('loginScreen').classList.add('hidden');
-  document.getElementById('mainApp').classList.remove('hidden');
 }
 
 // ============ UI NAVIGATION ============
@@ -615,7 +649,6 @@ function loadSavedView() {
   }
 }
 
-// ============ MEMBERS CRUD ============
 async function saveMember(event) {
   event.preventDefault();
   
@@ -643,7 +676,7 @@ async function saveMember(event) {
     let result;
     
     if (memberId) {
-      // ACTUALIZAR - NO cambiar la fecha de expiración ni el status
+      // ACTUALIZAR MIEMBRO EXISTENTE
       const updateData = {
         name: name,
         email: email,
@@ -665,10 +698,71 @@ async function saveMember(event) {
         .select();
         
       if (result.error) throw result.error;
+      
+      // Actualizar también el perfil en profiles si existe
+      const member = allMembers.find(m => m.id === parseInt(memberId));
+      if (member && member.auth_id) {
+        await client
+          .from('profiles')
+          .update({
+            email: email,
+            full_name: name,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', member.auth_id);
+      }
+      
       showToast('Miembro actualizado correctamente', 'success');
       
     } else {
-      // CREAR nuevo miembro
+      // ========== CREAR NUEVO MIEMBRO ==========
+      
+      // 1. Generar contraseña temporal
+      const tempPassword = generateTemporaryPassword();
+      
+      // 2. Crear usuario en Supabase Auth
+      const { data: authUser, error: authError } = await client.auth.signUp({
+        email: email,
+        password: tempPassword,
+        options: {
+          data: {
+            name: name,
+            role: 'member',
+            phone: phone
+          }
+        }
+      });
+      
+      if (authError) {
+        if (authError.message.includes('already registered')) {
+          console.log('⚠️ Usuario ya existe, continuando...');
+        } else {
+          throw authError;
+        }
+      }
+      
+      // 3. Crear perfil en tabla profiles
+      let profileCreated = false;
+      if (authUser?.user?.id) {
+        const { error: profileError } = await client
+          .from('profiles')
+          .insert({
+            id: authUser.user.id,
+            email: email,
+            full_name: name,
+            role: 'member',
+            created_at: new Date().toISOString()
+          });
+        
+        if (profileError) {
+          console.error('Error creando perfil:', profileError);
+        } else {
+          profileCreated = true;
+          console.log('✅ Perfil creado en profiles');
+        }
+      }
+      
+      // 4. Crear miembro en la tabla members
       const expirationDate = new Date();
       if (plan === 'Anual') {
         expirationDate.setFullYear(expirationDate.getFullYear() + 1);
@@ -689,7 +783,8 @@ async function saveMember(event) {
         emergency_contact: emergencyContact || null,
         emergency_phone: emergencyPhone || null,
         health_notes: healthNotes || null,
-        goals: goals || null
+        goals: goals || null,
+        auth_id: authUser?.user?.id || null
       };
       
       result = await client
@@ -699,10 +794,13 @@ async function saveMember(event) {
       
       if (result.error) throw result.error;
       
+      // 5. Enviar credenciales por WhatsApp
       if (result.data && result.data[0]) {
         const newMember = result.data[0];
-        await sendWelcomeWithQR(newMember);
+        await sendWelcomeWithCredentials(newMember, tempPassword);
       }
+      
+      showToast(`✅ Miembro creado. Credenciales enviadas por WhatsApp`, 'success');
     }
     
     // Cerrar modal y recargar datos
@@ -728,6 +826,54 @@ async function saveMember(event) {
     console.error('Error:', error);
     showToast('Error al guardar miembro: ' + error.message, 'error');
   }
+}
+
+// Función para generar contraseña temporal
+function generateTemporaryPassword() {
+  const length = 8;
+  const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let password = "";
+  for (let i = 0; i < length; i++) {
+    password += charset.charAt(Math.floor(Math.random() * charset.length));
+  }
+  return password;
+}
+
+// Función para enviar credenciales por WhatsApp
+async function sendWelcomeWithCredentials(member, tempPassword) {
+  if (!member.phone) {
+    console.warn('No hay teléfono para enviar credenciales');
+    showToast('⚠️ No se pudo enviar credenciales - miembro sin teléfono', 'warning');
+    return;
+  }
+  
+  const message = `🎉 *¡BIENVENIDO A NEOFIT, ${member.name}!* 🎉
+
+✅ Tu cuenta ha sido creada exitosamente.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📱 *TUS CREDENCIALES DE ACCESO:*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📧 *Usuario:* ${member.email}
+🔑 *Contraseña:* ${tempPassword}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📲 *ACCEDE AQUÍ:* ${window.location.origin}/login.html
+
+🎫 *USA TU QR EN LA ENTRADA DEL GIMNASIO*
+
+⚠️ *RECOMENDACIÓN:* Cambia tu contraseña en tu primer acceso.
+
+¡Te esperamos para entrenar! 💪
+
+_NeoFit Gym_`;
+
+  let cleanPhone = member.phone.replace(/\s/g, '').replace(/[-()]/g, '');
+  if (!cleanPhone.startsWith('+')) {
+    cleanPhone = cleanPhone.startsWith('52') ? `+${cleanPhone}` : `+52${cleanPhone}`;
+  }
+  
+  window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
 }
 
 // ============ SUBIR FOTO DE PERFIL ============
@@ -1413,60 +1559,125 @@ async function loadMemberExtraData(memberId) {
   if (!client) return;
   
   const member = currentProfileMember;
-  document.getElementById('infoName').textContent = member.name;
-  document.getElementById('infoEmail').textContent = member.email || '-';
-  document.getElementById('infoPhone').textContent = member.phone || '-';
-  document.getElementById('infoBirth').textContent = member.birth_date ? formatDate(member.birth_date) : '-';
-  document.getElementById('infoHeight').textContent = member.height ? `${member.height} cm` : '-';
-  document.getElementById('infoEmergencyContact').textContent = member.emergency_contact || '-';
-  document.getElementById('infoEmergencyPhone').textContent = member.emergency_phone || '-';
-  document.getElementById('infoGoals').textContent = member.goals || '-';
-  document.getElementById('infoHealthNotes').textContent = member.health_notes || '-';
-  document.getElementById('infoCurrentPlan').textContent = member.plan;
-  document.getElementById('infoExpiry').textContent = formatDate(member.membership_end);
+  
+  // Verificar que los elementos existan antes de asignarles valor
+  const infoName = document.getElementById('infoName');
+  const infoEmail = document.getElementById('infoEmail');
+  const infoPhone = document.getElementById('infoPhone');
+  const infoBirth = document.getElementById('infoBirth');
+  const infoHeight = document.getElementById('infoHeight');
+  const infoEmergencyContact = document.getElementById('infoEmergencyContact');
+  const infoEmergencyPhone = document.getElementById('infoEmergencyPhone');
+  const infoGoals = document.getElementById('infoGoals');
+  const infoHealthNotes = document.getElementById('infoHealthNotes');
+  const infoCurrentPlan = document.getElementById('infoCurrentPlan');
+  const infoExpiry = document.getElementById('infoExpiry');
+  const infoDaysLeft = document.getElementById('infoDaysLeft');
+  const infoLastCheckin = document.getElementById('infoLastCheckin');
+  const infoWeight = document.getElementById('infoWeight');
+  const infoBMI = document.getElementById('infoBMI');
+  const infoBodyFat = document.getElementById('infoBodyFat');
+  const infoMuscle = document.getElementById('infoMuscle');
+  
+  if (infoName) infoName.textContent = member.name || '-';
+  if (infoEmail) infoEmail.textContent = member.email || '-';
+  if (infoPhone) infoPhone.textContent = member.phone || '-';
+  if (infoBirth) infoBirth.textContent = member.birth_date ? formatDate(member.birth_date) : '-';
+  if (infoHeight) infoHeight.textContent = member.height ? `${member.height} cm` : '-';
+  if (infoEmergencyContact) infoEmergencyContact.textContent = member.emergency_contact || '-';
+  if (infoEmergencyPhone) infoEmergencyPhone.textContent = member.emergency_phone || '-';
+  if (infoGoals) infoGoals.textContent = member.goals || '-';
+  if (infoHealthNotes) infoHealthNotes.textContent = member.health_notes || '-';
+  if (infoCurrentPlan) infoCurrentPlan.textContent = member.plan || '-';
+  if (infoExpiry) infoExpiry.textContent = formatDate(member.membership_end);
   
   const daysLeft = getDaysLeft(member.membership_end);
-  const daysLeftEl = document.getElementById('infoDaysLeft');
-  daysLeftEl.textContent = daysLeft > 0 ? `${daysLeft} días` : 'Vencida';
-  daysLeftEl.className = daysLeft <= 7 && daysLeft > 0 ? 'font-medium text-yellow-400' : 'font-medium';
+  if (infoDaysLeft) {
+    infoDaysLeft.textContent = daysLeft > 0 ? `${daysLeft} días` : 'Vencida';
+    infoDaysLeft.className = daysLeft <= 7 && daysLeft > 0 ? 'font-medium text-yellow-400' : 'font-medium';
+  }
   
-  if (member.last_checkin) document.getElementById('infoLastCheckin').textContent = formatDateTime(member.last_checkin);
+  if (infoLastCheckin && member.last_checkin) infoLastCheckin.textContent = formatDateTime(member.last_checkin);
   
+  // Cargar progreso si existe
   const { data: progress } = await client.from('member_progress').select('*').eq('member_id', memberId).order('date', { ascending: false }).limit(1);
   if (progress && progress[0]) {
     const last = progress[0];
-    document.getElementById('infoWeight').textContent = last.weight ? `${last.weight} kg` : '-';
-    document.getElementById('infoBodyFat').textContent = last.body_fat ? `${last.body_fat}%` : '-';
-    document.getElementById('infoMuscle').textContent = last.muscle_mass ? `${last.muscle_mass} kg` : '-';
-    if (last.weight && member.height) {
+    if (infoWeight) infoWeight.textContent = last.weight ? `${last.weight} kg` : '-';
+    if (infoBodyFat) infoBodyFat.textContent = last.body_fat ? `${last.body_fat}%` : '-';
+    if (infoMuscle) infoMuscle.textContent = last.muscle_mass ? `${last.muscle_mass} kg` : '-';
+    if (last.weight && member.height && infoBMI) {
       const heightM = member.height / 100;
       const bmi = (last.weight / (heightM * heightM)).toFixed(1);
-      document.getElementById('infoBMI').textContent = bmi;
+      infoBMI.textContent = bmi;
     }
   }
   
+  // Cargar las listas (estas funciones ya tienen sus propias verificaciones)
   await loadProfilePayments(memberId);
   await loadProgressHistory(memberId);
   await loadMemberRoutines(memberId);
   await loadProfileCheckins(memberId);
+  
+  // Actualizar UI de usuario Auth
+  await updateUserAuthUI();
 }
 
 async function loadProfilePayments(memberId) {
   const client = window.supabaseClient();
   if (!client) return;
+  
   const { data } = await client.from('payments').select('*').eq('member_id', memberId).order('payment_date', { ascending: false });
   const container = document.getElementById('profilePaymentsList');
-  if (!data || data.length === 0) { container.innerHTML = '<div class="text-center p-8 text-zinc-400">No hay pagos registrados</div>'; return; }
-  container.innerHTML = data.map(p => `<div class="bg-zinc-800 rounded-xl p-4 flex justify-between items-center"><div><p class="font-semibold text-green-400">$${parseFloat(p.amount).toLocaleString()}</p><p class="text-sm text-zinc-400">${p.plan}</p></div><div class="text-right"><p class="text-sm">${formatDate(p.payment_date)}</p><p class="text-xs text-zinc-500">Vence: ${formatDate(p.expiration_date)}</p></div></div>`).join('');
+  if (!container) return;
+  
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div class="text-center p-8 text-zinc-400">No hay pagos registrados</div>';
+    return;
+  }
+  
+  container.innerHTML = data.map(p => `
+    <div class="bg-zinc-800 rounded-xl p-4 flex justify-between items-center">
+      <div>
+        <p class="font-semibold text-green-400">$${parseFloat(p.amount).toLocaleString()}</p>
+        <p class="text-sm text-zinc-400">${p.plan}</p>
+      </div>
+      <div class="text-right">
+        <p class="text-sm">${formatDate(p.payment_date)}</p>
+        <p class="text-xs text-zinc-500">Vence: ${formatDate(p.expiration_date)}</p>
+      </div>
+    </div>
+  `).join('');
 }
 
 async function loadProgressHistory(memberId) {
   const client = window.supabaseClient();
   if (!client) return;
+  
   const { data } = await client.from('member_progress').select('*').eq('member_id', memberId).order('date', { ascending: true });
   const container = document.getElementById('progressHistory');
-  if (!data || data.length === 0) { container.innerHTML = '<div class="text-center p-8 text-zinc-400">No hay mediciones registradas</div>'; return; }
-  container.innerHTML = data.map(p => `<div class="bg-zinc-800 rounded-xl p-4"><div class="flex justify-between items-start mb-2"><p class="font-semibold">${formatDate(p.date)}</p><button onclick="deleteProgress(${p.id})" class="text-red-400 text-sm"><i class="fas fa-trash"></i></button></div><div class="grid grid-cols-2 gap-2 text-sm">${p.weight ? `<div>⚖️ Peso: ${p.weight} kg</div>` : ''}${p.body_fat ? `<div>🎯 Grasa: ${p.body_fat}%</div>` : ''}${p.muscle_mass ? `<div>💪 Músculo: ${p.muscle_mass} kg</div>` : ''}${p.chest ? `<div>📏 Pecho: ${p.chest} cm</div>` : ''}${p.waist ? `<div>📏 Cintura: ${p.waist} cm</div>` : ''}</div>${p.notes ? `<p class="text-xs text-zinc-400 mt-2">📝 ${p.notes}</p>` : ''}</div>`).join('');
+  if (!container) return;
+  
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div class="text-center p-8 text-zinc-400">No hay mediciones registradas</div>';
+    return;
+  }
+  
+  container.innerHTML = data.map(p => `
+    <div class="bg-zinc-800 rounded-xl p-4">
+      <div class="flex justify-between items-start mb-2">
+        <p class="font-semibold">${formatDate(p.date)}</p>
+        <button onclick="deleteProgress(${p.id})" class="text-red-400 text-sm"><i class="fas fa-trash"></i></button>
+      </div>
+      <div class="grid grid-cols-2 gap-2 text-sm">
+        ${p.weight ? `<div>⚖️ Peso: ${p.weight} kg</div>` : ''}
+        ${p.body_fat ? `<div>🎯 Grasa: ${p.body_fat}%</div>` : ''}
+        ${p.muscle_mass ? `<div>💪 Músculo: ${p.muscle_mass} kg</div>` : ''}
+      </div>
+      ${p.notes ? `<p class="text-xs text-zinc-400 mt-2">📝 ${p.notes}</p>` : ''}
+    </div>
+  `).join('');
+  
   createProgressChart(data);
 }
 
@@ -1483,33 +1694,73 @@ function createProgressChart(progressData) {
 async function loadMemberRoutines(memberId) {
   const client = window.supabaseClient();
   if (!client) return;
+  
   const { data } = await client.from('routines').select('*').eq('member_id', memberId);
   const container = document.getElementById('profileRoutines');
-  if (!data || data.length === 0) { container.innerHTML = '<div class="text-center p-8 text-zinc-400">No hay rutinas asignadas</div>'; return; }
-  container.innerHTML = data.map(r => `<div class="bg-zinc-800 rounded-xl p-4"><div class="flex justify-between items-center"><div><h4 class="font-semibold">${escapeHtml(r.name)}</h4><p class="text-sm text-zinc-400">${r.difficulty || 'Intermedio'} • ${r.days_per_week || 3} días/semana</p></div><button onclick="viewRoutine(${r.id})" class="text-sky-400"><i class="fas fa-eye"></i></button></div></div>`).join('');
+  if (!container) return;
+  
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div class="text-center p-8 text-zinc-400">No hay rutinas asignadas</div>';
+    return;
+  }
+  
+  container.innerHTML = data.map(r => `
+    <div class="bg-zinc-800 rounded-xl p-4">
+      <div class="flex justify-between items-center">
+        <div>
+          <h4 class="font-semibold">${escapeHtml(r.name)}</h4>
+          <p class="text-sm text-zinc-400">${r.difficulty || 'Intermedio'} • ${r.days_per_week || 3} días/semana</p>
+        </div>
+        <button onclick="viewRoutine(${r.id})" class="text-sky-400"><i class="fas fa-eye"></i></button>
+      </div>
+    </div>
+  `).join('');
 }
 
 async function loadProfileCheckins(memberId) {
   const client = window.supabaseClient();
   if (!client) return;
+  
   const { data } = await client.from('checkins').select('*').eq('member_id', memberId).order('checkin_time', { ascending: false }).limit(20);
   const container = document.getElementById('profileCheckins');
-  if (!data || data.length === 0) { container.innerHTML = '<div class="text-center p-8 text-zinc-400">No hay check-ins registrados</div>'; return; }
-  container.innerHTML = data.map(c => `<div class="bg-zinc-800 rounded-xl p-3 flex justify-between items-center"><span>📅 ${formatDateTime(c.checkin_time)}</span><span class="text-green-400">✅ Asistió</span></div>`).join('');
+  if (!container) return;
+  
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div class="text-center p-8 text-zinc-400">No hay check-ins registrados</div>';
+    return;
+  }
+  
+  container.innerHTML = data.map(c => `
+    <div class="bg-zinc-800 rounded-xl p-3 flex justify-between items-center">
+      <span>📅 ${formatDateTime(c.checkin_time)}</span>
+      <span class="text-green-400">✅ Asistió</span>
+    </div>
+  `).join('');
 }
 
 function closeMemberProfile() { document.getElementById('memberProfileModal').classList.add('hidden'); currentProfileMember = null; }
 
 function showProfileTab(tab) {
-  const tabs = ['info', 'payments', 'progress', 'routines', 'checkins'];
+  const tabs = ['info', 'payments', 'progress', 'routines', 'checkins', 'user'];
   tabs.forEach(t => {
-    document.getElementById(`${t}Tab`).classList.add('hidden');
+    const tabEl = document.getElementById(`${t}Tab`);
+    if (tabEl) tabEl.classList.add('hidden');
+    
     const btn = document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}`);
-    if (btn) { btn.classList.remove('border-sky-500', 'text-sky-400'); btn.classList.add('text-zinc-400'); }
+    if (btn) {
+      btn.classList.remove('border-sky-500', 'text-sky-400');
+      btn.classList.add('text-zinc-400');
+    }
   });
-  document.getElementById(`${tab}Tab`).classList.remove('hidden');
+  
+  const activeTab = document.getElementById(`${tab}Tab`);
+  if (activeTab) activeTab.classList.remove('hidden');
+  
   const activeBtn = document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`);
-  if (activeBtn) { activeBtn.classList.add('border-sky-500', 'text-sky-400'); activeBtn.classList.remove('text-zinc-400'); }
+  if (activeBtn) {
+    activeBtn.classList.add('border-sky-500', 'text-sky-400');
+    activeBtn.classList.remove('text-zinc-400');
+  }
 }
 
 function quickCheckinFromProfile() {
@@ -1717,6 +1968,293 @@ function toggleMobileMenu() {
 
 function closeMobileMenuOnClick() {
   document.querySelectorAll('.w-72 nav button').forEach(link => link.addEventListener('click', () => { if (isMobile()) { document.querySelector('.w-72').style.left = '-100%'; document.body.style.overflow = 'auto'; } }));
+}
+
+// ============ GESTIÓN DE USUARIOS AUTH PARA MIEMBROS ============
+
+// Verificar si un miembro tiene usuario Auth
+async function checkMemberAuthStatus(memberId, memberEmail) {
+  const client = window.supabaseClient();
+  if (!client) return false;
+  
+  try {
+    // Intentar obtener el usuario por email
+    const { data: users, error } = await client.auth.admin.listUsers();
+    
+    // Si no tenemos acceso admin a la lista, intentamos verificar si puede loguear
+    if (error) {
+      console.warn('No se pudo listar usuarios, intentando método alternativo');
+      // Método alternativo: intentar reset de contraseña (si existe el usuario)
+      const { error: resetError } = await client.auth.resetPasswordForEmail(memberEmail);
+      // Si no hay error de "user not found", probablemente existe
+      return !resetError || !resetError.message.includes('User not found');
+    }
+    
+    const userExists = users?.users?.some(u => u.email === memberEmail);
+    return userExists;
+  } catch (error) {
+    console.error('Error verificando usuario Auth:', error);
+    return false;
+  }
+}
+
+// Actualizar UI del estado del usuario en el perfil
+async function updateUserAuthUI() {
+  if (!currentProfileMember) return;
+  
+  const hasAuth = await checkMemberAuthStatus(currentProfileMember.id, currentProfileMember.email);
+  
+  // También verificar si existe en profiles
+  let hasProfile = false;
+  if (currentProfileMember.auth_id) {
+    const client = window.supabaseClient();
+    if (client) {
+      const { data: profile } = await client
+        .from('profiles')
+        .select('id')
+        .eq('id', currentProfileMember.auth_id)
+        .single();
+      hasProfile = !!profile;
+    }
+  }
+  
+  const notCreatedDiv = document.getElementById('userNotCreated');
+  const createdDiv = document.getElementById('userCreated');
+  const statusDiv = document.getElementById('userAuthStatus');
+  const authEmailInput = document.getElementById('userAuthEmail');
+  
+  if (authEmailInput) authEmailInput.value = currentProfileMember.email;
+  
+  if (hasAuth || hasProfile) {
+    // Usuario YA tiene cuenta Auth
+    if (notCreatedDiv) notCreatedDiv.classList.add('hidden');
+    if (createdDiv) createdDiv.classList.remove('hidden');
+    if (statusDiv) {
+      statusDiv.style.background = 'rgba(16, 185, 129, 0.1)';
+      statusDiv.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+      document.getElementById('authStatusIcon').className = 'fas fa-check-circle text-green-400 text-2xl';
+      document.getElementById('authStatusText').textContent = '✓ Cuenta Activada';
+      document.getElementById('authStatusText').className = 'font-semibold text-green-400';
+      document.getElementById('authStatusDetail').textContent = 'El miembro puede iniciar sesión en la app cliente';
+    }
+  } else {
+    // Usuario NO tiene cuenta Auth
+    if (notCreatedDiv) notCreatedDiv.classList.remove('hidden');
+    if (createdDiv) createdDiv.classList.add('hidden');
+    if (statusDiv) {
+      statusDiv.style.background = 'rgba(239, 68, 68, 0.1)';
+      statusDiv.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+      document.getElementById('authStatusIcon').className = 'fas fa-exclamation-triangle text-red-400 text-2xl';
+      document.getElementById('authStatusText').textContent = '✗ Cuenta no creada';
+      document.getElementById('authStatusText').className = 'font-semibold text-red-400';
+      document.getElementById('authStatusDetail').textContent = 'Debes crear una cuenta de acceso para este miembro';
+    }
+  }
+}
+
+// Crear usuario Auth para un miembro
+async function createUserAuthForMember() {
+  if (!currentProfileMember) {
+    showToast('No hay miembro seleccionado', 'error');
+    return;
+  }
+  
+  const tempPassword = generateTemporaryPassword();
+  
+  showToast('Creando cuenta de acceso...', 'info');
+  
+  try {
+    const client = window.supabaseClient();
+    if (!client) throw new Error('Supabase no disponible');
+    
+    // 1. Crear usuario en Supabase Auth
+    const { data, error } = await client.auth.signUp({
+      email: currentProfileMember.email,
+      password: tempPassword,
+      options: {
+        data: {
+          name: currentProfileMember.name,
+          role: 'member',
+          phone: currentProfileMember.phone
+        }
+      }
+    });
+    
+    if (error) {
+      if (error.message.includes('already registered')) {
+        showToast('⚠️ El usuario ya existe. Puedes resetear su contraseña.', 'warning');
+        await updateUserAuthUI();
+        return;
+      }
+      throw error;
+    }
+    
+    // 2. Crear perfil en tabla profiles
+    if (data?.user?.id) {
+      const { error: profileError } = await client
+        .from('profiles')
+        .insert({
+          id: data.user.id,
+          email: currentProfileMember.email,
+          full_name: currentProfileMember.name,
+          role: 'member',
+          created_at: new Date().toISOString()
+        });
+      
+      if (profileError) {
+        console.error('Error creando perfil:', profileError);
+        showToast('⚠️ Usuario creado pero hubo error con el perfil', 'warning');
+      } else {
+        console.log('✅ Perfil creado en profiles');
+      }
+      
+      // 3. Actualizar el auth_id en la tabla members
+      await client
+        .from('members')
+        .update({ auth_id: data.user.id })
+        .eq('id', currentProfileMember.id);
+    }
+    
+    // 4. Enviar credenciales por WhatsApp
+    await sendWelcomeWithCredentials(currentProfileMember, tempPassword);
+    
+    showToast('✅ Cuenta creada. Credenciales enviadas por WhatsApp', 'success');
+    await updateUserAuthUI();
+    
+  } catch (error) {
+    console.error('Error creando usuario:', error);
+    showToast('Error al crear usuario: ' + error.message, 'error');
+  }
+}
+
+// Resetear contraseña (enviar email de recuperación)
+async function resetUserPassword() {
+  if (!currentProfileMember) return;
+  
+  try {
+    const client = window.supabaseClient();
+    if (!client) throw new Error('Supabase no disponible');
+    
+    const { error } = await client.auth.resetPasswordForEmail(currentProfileMember.email, {
+      redirectTo: window.location.origin + '/reset-password.html'
+    });
+    
+    if (error) throw error;
+    
+    showToast('📧 Se ha enviado un enlace de recuperación al email del miembro', 'success');
+    
+    // Opcional: enviar WhatsApp notificando
+    if (currentProfileMember.phone) {
+      await sendPasswordResetNotification(
+        currentProfileMember.name, 
+        currentProfileMember.email, 
+        currentProfileMember.phone
+      );
+    }
+    
+  } catch (error) {
+    console.error('Error:', error);
+    showToast('Error al enviar recuperación: ' + error.message, 'error');
+  }
+}
+
+// Reenviar credenciales por WhatsApp
+async function sendCredentialsWhatsApp() {
+  if (!currentProfileMember) return;
+  
+  // Generar nueva contraseña temporal
+  const tempPassword = generateTemporaryPassword();
+  
+  try {
+    const client = window.supabaseClient();
+    if (!client) throw new Error('Supabase no disponible');
+    
+    // Actualizar contraseña (requiere que el usuario exista)
+    const { error } = await client.auth.admin.updateUserById(
+      currentProfileMember.auth_id,
+      { password: tempPassword }
+    );
+    
+    if (error) {
+      // Si no podemos actualizar directamente, enviamos reset
+      await resetUserPassword();
+      showToast('📧 Se ha enviado un enlace para restablecer contraseña', 'success');
+      return;
+    }
+    
+    await sendWelcomeWithCredentials(currentProfileMember, tempPassword);
+    showToast('✅ Credenciales reenviadas por WhatsApp', 'success');
+    
+  } catch (error) {
+    console.error('Error:', error);
+    // Fallback: enviar solo el enlace de reset
+    await resetUserPassword();
+    showToast('📧 Se ha enviado un enlace para crear contraseña', 'success');
+  }
+}
+
+// Modal para establecer contraseña manualmente
+function showResetPasswordModal() {
+  const newPassword = prompt('Ingresa la nueva contraseña para ' + currentProfileMember.name + '\n(Mínimo 6 caracteres):');
+  
+  if (newPassword && newPassword.length >= 6) {
+    setManualPassword(newPassword);
+  } else if (newPassword) {
+    showToast('La contraseña debe tener al menos 6 caracteres', 'error');
+  }
+}
+
+async function setManualPassword(newPassword) {
+  try {
+    const client = window.supabaseClient();
+    if (!client) throw new Error('Supabase no disponible');
+    
+    // Método: enviar reset con contraseña específica
+    const { error } = await client.auth.resetPasswordForEmail(currentProfileMember.email, {
+      redirectTo: window.location.origin + '/set-password.html?new=' + encodeURIComponent(newPassword)
+    });
+    
+    if (error) throw error;
+    
+    showToast('📧 Se ha enviado un enlace al email para establecer la nueva contraseña', 'success');
+    
+    // Enviar WhatsApp con la nueva contraseña
+    if (currentProfileMember.phone) {
+      const message = `🔐 *NeoFit - Nueva Contraseña*
+
+Hola ${currentProfileMember.name},
+
+Tu contraseña de acceso ha sido actualizada.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+📧 Usuario: ${currentProfileMember.email}
+🔑 Nueva contraseña: ${newPassword}
+━━━━━━━━━━━━━━━━━━━━━━━
+
+🔗 Accede aquí: ${window.location.origin}/login.html
+
+_NeoFit Gym_`;
+      
+      let cleanPhone = currentProfileMember.phone.replace(/\D/g, '');
+      if (cleanPhone.length === 10) cleanPhone = '52' + cleanPhone;
+      if (!cleanPhone.startsWith('+')) cleanPhone = '+' + cleanPhone;
+      window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+    }
+    
+  } catch (error) {
+    console.error('Error:', error);
+    showToast('Error al establecer contraseña: ' + error.message, 'error');
+  }
+}
+
+// Función para copiar al portapapeles
+function copyToClipboard(elementId) {
+  const input = document.getElementById(elementId);
+  if (input) {
+    input.select();
+    document.execCommand('copy');
+    showToast('📋 Copiado al portapapeles', 'success');
+  }
 }
 
 // ============ EVENT LISTENERS ============

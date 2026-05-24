@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=yes"/>
+<meta name="theme-color" content="#0284c7"/>
+<title>NeoFit • Mi Espacio Personal</title>
+<!-- Favicon -->
+<link rel="icon" type="image/png" href="img/icon.png">
+<link rel="shortcut icon" type="image/png" href="img/icon.png">
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700;14..32,800;14..32,900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"/>
+<script src="https://unpkg.com/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
+
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #030712;
+    background-image: radial-gradient(circle at 15% 30%, rgba(14, 165, 233, 0.08) 0%, transparent 45%),
+                      radial-gradient(circle at 85% 70%, rgba(56, 189, 248, 0.06) 0%, transparent 55%);
+    color: #f1f5f9;
+    overflow-x: hidden;
+  }
+  
+  .neo-container {
+    max-width: 560px;
+    margin: 0 auto;
+    width: 100%;
+    position: relative;
+    background: transparent;
+  }
+  
+  .glass-modern {
+    background: rgba(17, 24, 39, 0.68);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 2rem;
+  }
+  
+  .glass-card {
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s ease;
+  }
+  
+  .glass-card:hover {
+    border-color: rgba(14, 165, 233, 0.35);
+    background: rgba(20, 30, 50, 0.7);
+  }
+  
+  .membership-glow {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, rgba(10, 20, 35, 0.9), rgba(5, 10, 20, 0.95));
+    border: 1px solid rgba(14, 165, 233, 0.2);
+  }
+  
+  .membership-glow::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 30% 40%, rgba(14,165,233,0.12), transparent 70%);
+    pointer-events: none;
+  }
+  
+  .qr-frame {
+    background: white;
+    padding: 0.75rem;
+    border-radius: 1.5rem;
+    box-shadow: 0 20px 35px -10px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1);
+    display: inline-flex;
+  }
+  
+  .progress-bar-bg {
+    background: rgba(255,255,255,0.08);
+    border-radius: 100px;
+  }
+  
+  .tab-active-style {
+    background: linear-gradient(95deg, #0ea5e9, #06b6d4);
+    box-shadow: 0 6px 14px rgba(14,165,233,0.25);
+    color: white;
+  }
+  
+  .bottom-nav-modern {
+    background: rgba(5, 10, 20, 0.85);
+    backdrop-filter: blur(28px);
+    border-top: 1px solid rgba(255,255,255,0.08);
+    border-radius: 2rem 2rem 0 0;
+    max-width: 560px;
+    margin: 0 auto;
+  }
+  
+  .nav-item {
+    transition: all 0.2s;
+  }
+  
+  .nav-item.active {
+    color: #38bdf8;
+    text-shadow: 0 0 6px rgba(56,189,248,0.3);
+  }
+  
+  .nav-item.active i {
+    transform: translateY(-2px);
+  }
+  
+  .btn-primary-glow {
+    background: linear-gradient(100deg, #0ea5e9, #06b6d4, #0284c7);
+    box-shadow: 0 12px 22px -12px rgba(14,165,233,0.4);
+    transition: all 0.2s;
+  }
+  
+  .btn-primary-glow:active {
+    transform: scale(0.97);
+  }
+  
+  .toast-custom {
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 2rem;
+  }
+  
+  #clientAvatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: rgba(255,255,255,0.05);
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: #0ea5e9;
+    border-radius: 999px;
+  }
+</style>
+</head>
+<body>
+
+<div class="neo-container px-4 pb-28">
+  
+  <!-- HEADER -->
+  <header class="pt-5 pb-2 flex justify-between items-center sticky top-0 z-40 bg-[#030712]/80 backdrop-blur-xl rounded-b-2xl -mx-1 px-3">
+    <div class="flex items-center gap-3">
+      <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shadow-lg shadow-sky-500/20">
+        <i class="fas fa-dumbbell text-white text-xl"></i>
+      </div>
+      <div>
+        <h1 class="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-white to-sky-200 bg-clip-text text-transparent">NeoFit</h1>
+        <p class="text-[11px] font-medium text-sky-400/80 -mt-0.5">Mi espacio inteligente</p>
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <button onclick="refreshClientData()" class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 transition flex items-center justify-center text-zinc-300">
+        <i class="fas fa-rotate text-sm"></i>
+      </button>
+      <button onclick="logoutClient()" class="w-10 h-10 rounded-xl bg-white/5 hover:bg-red-500/20 transition flex items-center justify-center text-red-300">
+        <i class="fas fa-sign-out-alt text-sm"></i>
+      </button>
+    </div>
+  </header>
+  
+  <!-- BIENVENIDA + AVATAR -->
+  <div class="flex items-center gap-4 mt-2 mb-5">
+    <div id="clientAvatar" class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-3xl font-black shadow-xl ring-2 ring-white/20">
+      J
+    </div>
+    <div>
+      <span class="text-zinc-400 text-xs font-medium uppercase tracking-wide">Bienvenido(a)</span>
+      <h2 id="clientName" class="text-2xl md:text-3xl font-black leading-tight tracking-tight">Cargando...</h2>
+    </div>
+  </div>
+  
+  <!-- MEMBRESÍA -->
+  <div class="membership-glow rounded-3xl p-5 mb-5">
+    <div class="flex justify-between items-start">
+      <div>
+        <p class="text-sky-300 text-[11px] font-bold uppercase tracking-wider">Membresía activa</p>
+        <div id="clientPlan" class="text-2xl font-black mt-1 flex items-center gap-2">
+          <i class="fas fa-crown text-yellow-400 text-lg"></i> <span>Premium</span>
+        </div>
+      </div>
+      <div class="text-right">
+        <p class="text-zinc-400 text-[11px]">Vencimiento</p>
+        <p id="clientExpiry" class="font-bold text-base">—</p>
+      </div>
+    </div>
+    <div class="mt-5">
+      <div class="flex justify-between text-xs mb-1.5">
+        <span class="text-zinc-400">Progreso membresía</span>
+        <span id="clientDaysLeft" class="text-sky-300 font-semibold text-xs">— días</span>
+      </div>
+      <div class="progress-bar-bg h-2 w-full overflow-hidden rounded-full">
+        <div id="clientProgressBar" class="h-full w-0 bg-gradient-to-r from-sky-400 to-cyan-400 rounded-full transition-all duration-500"></div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- QR + CHECKIN unificados -->
+  <div class="glass-card rounded-3xl p-4 mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="w-14 h-14 rounded-2xl bg-sky-500/15 flex items-center justify-center">
+        <i class="fas fa-qrcode text-2xl text-sky-400"></i>
+      </div>
+      <div>
+        <p class="text-zinc-300 text-xs uppercase tracking-wide">Acceso digital</p>
+        <h3 class="font-bold text-lg">Código QR</h3>
+      </div>
+    </div>
+    <div class="flex items-center gap-4">
+      <div class="qr-frame w-14 h-14 flex items-center justify-center p-1">
+        <div id="clientQR" class="scale-[0.55] -m-2"></div>
+      </div>
+      <button onclick="downloadClientQR()" class="bg-white/5 hover:bg-white/10 rounded-xl px-3 py-2 text-xs font-medium transition">
+        <i class="fas fa-download mr-1"></i> Guardar
+      </button>
+    </div>
+  </div>
+  
+  <!-- BOTÓN CHECKIN -->
+  <button onclick="quickClientCheckin()" class="btn-primary-glow w-full py-4 rounded-2xl font-extrabold text-white text-lg flex items-center justify-center gap-3 mb-8">
+    <i class="fas fa-fingerprint text-xl"></i> Registrar mi asistencia
+  </button>
+  
+  <!-- TABS -->
+  <div class="glass-modern p-1.5 rounded-2xl flex mb-6">
+    <button id="homeBtn" onclick="showClientTab('home')" class="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all tab-active-style">🏠 Inicio</button>
+    <button id="progressBtn" onclick="showClientTab('progress')" class="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-300 hover:text-white transition-all">📈 Progreso</button>
+    <button id="routineBtn" onclick="showClientTab('routine')" class="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-300 hover:text-white transition-all">💪 Rutina</button>
+    <button id="profileBtn" onclick="showClientTab('profile')" class="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-300 hover:text-white transition-all">👤 Perfil</button>
+  </div>
+  
+  <!-- HOME -->
+  <div id="homeTab">
+    <div class="glass-card rounded-3xl p-5">
+      <div class="flex items-center gap-2 mb-4">
+        <i class="fas fa-clock-rotate-left text-sky-400 text-lg"></i>
+        <h3 class="font-bold text-lg">Últimos ingresos</h3>
+      </div>
+      <div id="clientRecentCheckins" class="space-y-3">
+        <div class="animate-pulse flex gap-3 items-center p-3 bg-white/5 rounded-2xl">
+          <div class="h-10 w-10 rounded-xl bg-slate-700"></div>
+          <div class="h-5 bg-slate-700 rounded w-3/4"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- PROGRESS -->
+  <div id="progressTab" class="hidden">
+    <div class="glass-card rounded-3xl p-5 mb-5">
+      <div class="flex justify-between items-center mb-4">
+        <div>
+          <span class="text-sky-400 text-xs tracking-wider">EVOLUCIÓN FÍSICA</span>
+          <h3 class="text-xl font-bold">Registro de medidas</h3>
+        </div>
+        <i class="fas fa-chart-line text-3xl text-sky-400/40"></i>
+      </div>
+      <canvas id="clientProgressChart" height="200" class="w-full"></canvas>
+    </div>
+    <div class="glass-card rounded-3xl p-5">
+      <h4 class="font-semibold flex items-center gap-2 mb-3"><i class="fas fa-weight-scale text-sky-400"></i> Últimas mediciones</h4>
+      <div id="clientMeasurements" class="space-y-3"></div>
+    </div>
+  </div>
+  
+  <!-- ROUTINE -->
+  <div id="routineTab" class="hidden">
+    <div class="glass-card rounded-3xl p-6" id="clientRoutine">
+      <div class="animate-pulse flex flex-col items-center gap-3">
+        <div class="h-6 w-40 bg-slate-700 rounded-full"></div>
+        <div class="h-20 w-full bg-slate-800/40 rounded-2xl"></div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- PERFIL -->
+  <div id="profileTab" class="hidden">
+    <div class="glass-card rounded-3xl p-5 space-y-4">
+      <div class="flex items-center gap-3 border-b border-white/10 pb-3">
+        <i class="fas fa-envelope text-sky-400 w-6"></i>
+        <div>
+          <p class="text-xs text-zinc-400">Correo electrónico</p>
+          <p id="clientProfileEmail" class="font-medium">—</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 border-b border-white/10 pb-3">
+        <i class="fas fa-phone-alt text-sky-400 w-6"></i>
+        <div>
+          <p class="text-xs text-zinc-400">Teléfono</p>
+          <p id="clientProfilePhone" class="font-medium">—</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 border-b border-white/10 pb-3">
+        <i class="fas fa-address-card text-sky-400 w-6"></i>
+        <div>
+          <p class="text-xs text-zinc-400">Contacto de emergencia</p>
+          <p id="clientEmergencyContact" class="font-medium">—</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 border-b border-white/10 pb-3">
+        <i class="fas fa-bullseye text-sky-400 w-6"></i>
+        <div>
+          <p class="text-xs text-zinc-400">Objetivo fitness</p>
+          <p id="clientGoals" class="font-medium">—</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <i class="fas fa-calendar-alt text-sky-400 w-6"></i>
+        <div>
+          <p class="text-xs text-zinc-400">Miembro desde</p>
+          <p id="clientSince" class="font-medium">—</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav-modern fixed bottom-0 left-0 right-0 z-50 w-full">
+  <div class="max-w-[560px] mx-auto flex justify-around py-2 px-2">
+    <button data-nav="home" class="nav-item active flex flex-col items-center gap-0.5 text-sky-400 transition-all">
+      <i class="fas fa-house text-xl"></i>
+      <span class="text-[10px] font-medium">Inicio</span>
+    </button>
+    <button data-nav="progress" class="nav-item flex flex-col items-center gap-0.5 text-zinc-400 transition-all">
+      <i class="fas fa-chart-line text-xl"></i>
+      <span class="text-[10px] font-medium">Progreso</span>
+    </button>
+    <button data-nav="routine" class="nav-item flex flex-col items-center gap-0.5 text-zinc-400 transition-all">
+      <i class="fas fa-dumbbell text-xl"></i>
+      <span class="text-[10px] font-medium">Rutina</span>
+    </button>
+    <button data-nav="profile" class="nav-item flex flex-col items-center gap-0.5 text-zinc-400 transition-all">
+      <i class="fas fa-user-circle text-xl"></i>
+      <span class="text-[10px] font-medium">Perfil</span>
+    </button>
+  </div>
+</nav>
+
+<!-- TOAST -->
+<div id="clientToast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 toast-custom px-5 py-3 z-[100] shadow-xl max-w-[90vw] whitespace-nowrap">
+  <div class="flex items-center gap-2">
+    <i class="fas fa-circle-check text-emerald-400 text-sm"></i>
+    <span id="toastText" class="text-sm font-medium">Acción completada</span>
+  </div>
+</div>
+
+<script src="supabase-config.js"></script>
+<script src="client-app.js"></script>
+
+<script>
+  // Sincronizar bottom nav con tabs
+  document.addEventListener('DOMContentLoaded', () => {
+    const navButtons = document.querySelectorAll('.nav-item');
+    navButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.getAttribute('data-nav');
+        if (target === 'home') showClientTab('home');
+        else if (target === 'progress') showClientTab('progress');
+        else if (target === 'routine') showClientTab('routine');
+        else if (target === 'profile') showClientTab('profile');
+        
+        navButtons.forEach(b => {
+          b.classList.remove('active');
+          b.classList.remove('text-sky-400');
+          b.classList.add('text-zinc-400');
+        });
+        btn.classList.add('active');
+        btn.classList.remove('text-zinc-400');
+        btn.classList.add('text-sky-400');
+      });
+    });
+  });
+</script>
+</body>
+</html>
