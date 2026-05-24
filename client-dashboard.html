@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=yes"/>
 <meta name="theme-color" content="#0284c7"/>
 <title>NeoFit • Mi Espacio Personal</title>
-<!-- Favicon -->
+
 <link rel="icon" type="image/png" href="img/icon.png">
 <link rel="shortcut icon" type="image/png" href="img/icon.png">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -33,11 +33,10 @@
   }
   
   .neo-container {
-    max-width: 560px;
+    max-width: 420px;
     margin: 0 auto;
     width: 100%;
     position: relative;
-    background: transparent;
   }
   
   .glass-modern {
@@ -52,11 +51,6 @@
     backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.05);
     transition: all 0.2s ease;
-  }
-  
-  .glass-card:hover {
-    border-color: rgba(14, 165, 233, 0.35);
-    background: rgba(20, 30, 50, 0.7);
   }
   
   .membership-glow {
@@ -76,10 +70,9 @@
   
   .qr-frame {
     background: white;
-    padding: 0.75rem;
-    border-radius: 1.5rem;
+    padding: 16px;
+    border-radius: 1.75rem;
     box-shadow: 0 20px 35px -10px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1);
-    display: inline-flex;
   }
   
   .progress-bar-bg {
@@ -98,21 +91,8 @@
     backdrop-filter: blur(28px);
     border-top: 1px solid rgba(255,255,255,0.08);
     border-radius: 2rem 2rem 0 0;
-    max-width: 560px;
+    max-width: 420px;
     margin: 0 auto;
-  }
-  
-  .nav-item {
-    transition: all 0.2s;
-  }
-  
-  .nav-item.active {
-    color: #38bdf8;
-    text-shadow: 0 0 6px rgba(56,189,248,0.3);
-  }
-  
-  .nav-item.active i {
-    transform: translateY(-2px);
   }
   
   .btn-primary-glow {
@@ -124,44 +104,34 @@
   .btn-primary-glow:active {
     transform: scale(0.97);
   }
-  
-  .toast-custom {
-    background: rgba(0,0,0,0.8);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255,255,255,0.15);
-    border-radius: 2rem;
-  }
-  
-  #clientAvatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  
-  ::-webkit-scrollbar {
-    width: 4px;
-  }
-  
-  ::-webkit-scrollbar-track {
-    background: rgba(255,255,255,0.05);
-  }
-  
-  ::-webkit-scrollbar-thumb {
-    background: #0ea5e9;
-    border-radius: 999px;
+
+  /* === MEJORAS PARA MÓVIL === */
+  @media (max-width: 480px) {
+    .neo-container {
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+    
+    .glass-card, .membership-glow {
+      border-radius: 1.75rem;
+    }
+    
+    .qr-frame {
+      width: 260px !important;
+      height: 260px !important;
+      padding: 14px;
+    }
   }
 </style>
 </head>
 <body>
 
-<div class="neo-container px-4 pb-28">
+<div class="neo-container px-4 pb-24">
   
   <!-- HEADER -->
   <header class="pt-5 pb-2 flex justify-between items-center sticky top-0 z-40 bg-[#030712]/80 backdrop-blur-xl rounded-b-2xl -mx-1 px-3">
     <div class="flex items-center gap-3">
-      <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shadow-lg shadow-sky-500/20">
-        <i class="fas fa-dumbbell text-white text-xl"></i>
-      </div>
+      <img src="img/logo.png" alt="NeoFit Logo" class="w-11 h-11 rounded-2xl object-contain shadow-lg shadow-sky-500/20">
       <div>
         <h1 class="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-white to-sky-200 bg-clip-text text-transparent">NeoFit</h1>
         <p class="text-[11px] font-medium text-sky-400/80 -mt-0.5">Mi espacio inteligente</p>
@@ -213,29 +183,32 @@
     </div>
   </div>
   
-  <!-- QR + CHECKIN unificados -->
-  <div class="glass-card rounded-3xl p-4 mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-    <div class="flex items-center gap-3">
-      <div class="w-14 h-14 rounded-2xl bg-sky-500/15 flex items-center justify-center">
-        <i class="fas fa-qrcode text-2xl text-sky-400"></i>
+  <!-- QR MEJORADO -->
+  <div class="glass-card rounded-3xl p-6 mb-6">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-14 h-14 rounded-2xl bg-sky-500/15 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-qrcode text-3xl text-sky-400"></i>
       </div>
       <div>
-        <p class="text-zinc-300 text-xs uppercase tracking-wide">Acceso digital</p>
-        <h3 class="font-bold text-lg">Código QR</h3>
+        <p class="text-sky-400 text-xs uppercase tracking-widest font-medium">ACCESO DIGITAL</p>
+        <h3 class="font-bold text-xl">Código QR</h3>
       </div>
     </div>
-    <div class="flex items-center gap-4">
-      <div class="qr-frame w-14 h-14 flex items-center justify-center p-1">
-        <div id="clientQR" class="scale-[0.55] -m-2"></div>
+
+    <div class="flex flex-col items-center">
+      <div class="qr-frame mx-auto">
+        <div id="clientQR" class="w-full h-full flex items-center justify-center"></div>
       </div>
-      <button onclick="downloadClientQR()" class="bg-white/5 hover:bg-white/10 rounded-xl px-3 py-2 text-xs font-medium transition">
-        <i class="fas fa-download mr-1"></i> Guardar
+      
+      <button onclick="downloadClientQR()" 
+              class="mt-6 flex items-center gap-2 bg-white/10 hover:bg-white/20 transition px-6 py-3 rounded-2xl text-sm font-medium w-full max-w-[260px]">
+        <i class="fas fa-download"></i> Guardar Código QR
       </button>
     </div>
   </div>
   
   <!-- BOTÓN CHECKIN -->
-  <button onclick="quickClientCheckin()" class="btn-primary-glow w-full py-4 rounded-2xl font-extrabold text-white text-lg flex items-center justify-center gap-3 mb-8">
+  <button onclick="quickClientCheckin()" class="btn-primary-glow w-full py-5 rounded-2xl font-extrabold text-white text-lg flex items-center justify-center gap-3 mb-8 active:scale-95">
     <i class="fas fa-fingerprint text-xl"></i> Registrar mi asistencia
   </button>
   
@@ -255,15 +228,12 @@
         <h3 class="font-bold text-lg">Últimos ingresos</h3>
       </div>
       <div id="clientRecentCheckins" class="space-y-3">
-        <div class="animate-pulse flex gap-3 items-center p-3 bg-white/5 rounded-2xl">
-          <div class="h-10 w-10 rounded-xl bg-slate-700"></div>
-          <div class="h-5 bg-slate-700 rounded w-3/4"></div>
-        </div>
+        <!-- Se llena con JS -->
       </div>
     </div>
   </div>
   
-  <!-- PROGRESS -->
+  <!-- PROGRESS, ROUTINE y PROFILE se mantienen igual -->
   <div id="progressTab" class="hidden">
     <div class="glass-card rounded-3xl p-5 mb-5">
       <div class="flex justify-between items-center mb-4">
@@ -281,17 +251,12 @@
     </div>
   </div>
   
-  <!-- ROUTINE -->
   <div id="routineTab" class="hidden">
     <div class="glass-card rounded-3xl p-6" id="clientRoutine">
-      <div class="animate-pulse flex flex-col items-center gap-3">
-        <div class="h-6 w-40 bg-slate-700 rounded-full"></div>
-        <div class="h-20 w-full bg-slate-800/40 rounded-2xl"></div>
-      </div>
+      <!-- Se llena con JS -->
     </div>
   </div>
   
-  <!-- PERFIL -->
   <div id="profileTab" class="hidden">
     <div class="glass-card rounded-3xl p-5 space-y-4">
       <div class="flex items-center gap-3 border-b border-white/10 pb-3">
@@ -335,7 +300,7 @@
 
 <!-- BOTTOM NAV -->
 <nav class="bottom-nav-modern fixed bottom-0 left-0 right-0 z-50 w-full">
-  <div class="max-w-[560px] mx-auto flex justify-around py-2 px-2">
+  <div class="max-w-[420px] mx-auto flex justify-around py-2 px-2">
     <button data-nav="home" class="nav-item active flex flex-col items-center gap-0.5 text-sky-400 transition-all">
       <i class="fas fa-house text-xl"></i>
       <span class="text-[10px] font-medium">Inicio</span>
@@ -367,7 +332,7 @@
 <script src="client-app.js"></script>
 
 <script>
-  // Sincronizar bottom nav con tabs
+  // Sincronizar bottom nav con tabs (mantenido)
   document.addEventListener('DOMContentLoaded', () => {
     const navButtons = document.querySelectorAll('.nav-item');
     navButtons.forEach(btn => {
@@ -378,14 +343,8 @@
         else if (target === 'routine') showClientTab('routine');
         else if (target === 'profile') showClientTab('profile');
         
-        navButtons.forEach(b => {
-          b.classList.remove('active');
-          b.classList.remove('text-sky-400');
-          b.classList.add('text-zinc-400');
-        });
-        btn.classList.add('active');
-        btn.classList.remove('text-zinc-400');
-        btn.classList.add('text-sky-400');
+        navButtons.forEach(b => b.classList.remove('active', 'text-sky-400'));
+        btn.classList.add('active', 'text-sky-400');
       });
     });
   });

@@ -110,7 +110,7 @@ async function loadClientData() {
   const qrContainer = document.getElementById('clientQR');
   if (qrContainer && !qrContainer.querySelector('canvas')) {
     qrContainer.innerHTML = '';
-    new QRCode(qrContainer, { text: `NEOFIT_${currentClient.id}`, width: 180, height: 180 });
+    new QRCode(qrContainer, { text: `NEOFIT_${currentClient.id}`, width: 240, height: 240 });
   }
   
   // ========== CARGAR FOTO DE PERFIL DESDE SUPABASE STORAGE ==========
