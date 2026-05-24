@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>NeoFit ERP - Sistema de Gestión de Gimnasio</title>
+  
+  <!-- Favicon (ícono de pestaña) -->
+  <link rel="icon" type="image/png" href="img/icon.png">
+  <link rel="shortcut icon" type="image/png" href="img/icon.png">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+  <!-- Estilos personalizados -->
+  <link rel="stylesheet" href="styles.css">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- QRCode.js -->
+  <script src="https://unpkg.com/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <!-- HTML5 QR Code (para escáner) -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <!-- Supabase JS - Versión específica y estable -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #09090b;
+    }
+    .nav-active {
+      background: linear-gradient(135deg, #0284c7, #0369a1);
+      color: white;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .card-hover {
+      transition: all 0.3s ease;
+    }
+    .card-hover:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.5s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .qr-scanner {
+      position: relative;
+      overflow: hidden;
+    }
+    .qr-scanner::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 2px solid #0284c7;
+      border-radius: 1rem;
+      pointer-events: none;
+    }
+    /* Estilo para el logo en sidebar */
+    .sidebar-logo {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+      border-radius: 12px;
+    }
+    /* Logo en pantalla de login */
+    .login-logo {
+      width: 70px;
+      height: 70px;
+      object-fit: contain;
+      margin: 0 auto;
+      border-radius: 20px;
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-zinc-950 to-zinc-900 text-white">
+
+  <!-- Mobile Menu Overlay -->
+  <div id="mobileOverlay" class="hidden fixed inset-0 bg-black/50 z-40 lg:hidden" onclick="toggleMobileMenu()"></div>
+
+  <!-- Login Screen -->
+  <div id="loginScreen" class="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-slate-900 to-zinc-900">
+    <div class="bg-zinc-900/90 backdrop-blur-xl rounded-3xl p-10 w-full max-w-md border border-zinc-800 shadow-2xl animate-fade-in">
+      <div class="text-center mb-8">
+        <!-- Logo en pantalla de login -->
+        <img src="img/logo.png" alt="NeoFit Logo" class="login-logo mb-4" onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
+        <i class="fas fa-dumbbell text-6xl text-sky-500 mb-4" style="display: none;"></i>
+        <h1 class="text-4xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">NeoFit</h1>
+        <p class="text-zinc-400 mt-2">Sistema de Gestión ERP</p>
+      </div>
+      
+      <form id="loginForm" class="space-y-5">
+        <!-- Campo Email -->
+        <div>
+          <label class="block text-zinc-400 text-sm mb-2">Email</label>
+          <input type="email" id="loginEmail" placeholder="admin@neofit.com" 
+                 class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 focus:outline-none focus:border-sky-500 transition">
+        </div>
+        
+        <!-- Campo Password CON EL OJO -->
+        <div>
+          <label class="block text-zinc-400 text-sm mb-2">Contraseña</label>
+          <div class="relative">
+            <input type="password" id="loginPassword" placeholder="••••••••" 
+                   class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 pr-12 focus:outline-none focus:border-sky-500 transition">
+            <button type="button" id="togglePassword" 
+                    class="absolute right-3 top-1/2 transform -translate-y-1/2 text-zinc-400 hover:text-sky-400 transition">
+              <i class="fas fa-eye-slash text-xl"></i>
+            </button>
+          </div>
+        </div>
+        
+        <button type="submit" class="w-full py-4 bg-gradient-to-r from-sky-600 to-blue-600 rounded-2xl font-bold text-lg hover:shadow-lg transition transform hover:scale-[1.02]">
+          <i class="fas fa-sign-in-alt mr-2"></i> Iniciar Sesión
+        </button>
+      </form>
+      
+      <p class="text-center text-zinc-500 text-sm mt-6">
+        <i class="fas fa-info-circle mr-1"></i> Demo: admin@neofit.com / demo123
+      </p>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="mainApp" class="hidden">
+    <div class="flex h-screen">
+      <!-- Sidebar -->
+      <div class="w-72 bg-zinc-900/50 backdrop-blur-xl border-r border-zinc-800">
+        <div class="p-6 border-b border-zinc-800">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <!-- Logo en sidebar -->
+              <img src="img/logo.png" alt="NeoFit Logo" class="sidebar-logo" onerror="this.style.display='none'">
+              <div>
+                <h1 class="text-3xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">NeoFit</h1>
+                <p class="text-zinc-500 text-sm">ERP Gimnasio</p>
+              </div>
+            </div>
+            <button onclick="logout()" class="text-zinc-500 hover:text-red-500 transition">
+              <i class="fas fa-sign-out-alt text-xl"></i>
+            </button>
+          </div>
+        </div>
+        
+        <nav class="p-4 space-y-2">
+          <button onclick="showPage('dashboard')" class="nav-active w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition" id="btn-dashboard">
+            <i class="fas fa-chart-line w-5"></i> Dashboard
+          </button>
+          <button onclick="showPage('members')" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 rounded-2xl text-left text-zinc-400 hover:text-white transition" id="btn-members">
+            <i class="fas fa-users w-5"></i> Miembros
+          </button>
+          <button onclick="showPage('checkin')" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 rounded-2xl text-left text-zinc-400 hover:text-white transition" id="btn-checkin">
+            <i class="fas fa-qrcode w-5"></i> Check-in QR
+          </button>
+          <button onclick="showPage('payments')" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 rounded-2xl text-left text-zinc-400 hover:text-white transition" id="btn-payments">
+            <i class="fas fa-credit-card w-5"></i> Pagos
+          </button>
+          <button onclick="showPage('whatsapp')" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 rounded-2xl text-left text-zinc-400 hover:text-white transition" id="btn-whatsapp">
+            <i class="fab fa-whatsapp w-5"></i> WhatsApp
+          </button>
+        </nav>
+      </div>
+
+      <!-- Main Content -->
+      <div class="flex-1 overflow-auto p-8">
+        
+        <!-- Dashboard -->
+        <div id="page-dashboard" class="animate-fade-in">
+          <h2 class="text-3xl font-bold mb-8">Dashboard Principal</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="bg-gradient-to-br from-zinc-900 to-zinc-800 p-6 rounded-3xl card-hover">
+              <div class="flex justify-between items-start">
+                <div>
+                  <p class="text-zinc-400 text-sm">Miembros Activos</p>
+                  <p class="text-5xl font-bold mt-2" id="activeMembers">0</p>
+                </div>
+                <i class="fas fa-user-check text-4xl text-green-500"></i>
+              </div>
+            </div>
+            <div class="bg-gradient-to-br from-zinc-900 to-zinc-800 p-6 rounded-3xl card-hover">
+              <div class="flex justify-between items-start">
+                <div>
+                  <p class="text-zinc-400 text-sm">Ingresos del Mes</p>
+                  <p class="text-5xl font-bold mt-2" id="monthlyIncome">$0</p>
+                </div>
+                <i class="fas fa-dollar-sign text-4xl text-yellow-500"></i>
+              </div>
+            </div>
+            <div class="bg-gradient-to-br from-zinc-900 to-zinc-800 p-6 rounded-3xl card-hover">
+              <div class="flex justify-between items-start">
+                <div>
+                  <p class="text-zinc-400 text-sm">Check-ins Hoy</p>
+                  <p class="text-5xl font-bold mt-2" id="todayCheckins">0</p>
+                </div>
+                <i class="fas fa-clipboard-list text-4xl text-blue-500"></i>
+              </div>
+            </div>
+            <div class="bg-gradient-to-br from-zinc-900 to-zinc-800 p-6 rounded-3xl card-hover">
+              <div class="flex justify-between items-start">
+                <div>
+                  <p class="text-zinc-400 text-sm">Por Vencer (7 días)</p>
+                  <p class="text-5xl font-bold mt-2 text-orange-500" id="expiringMembers">0</p>
+                </div>
+                <i class="fas fa-clock text-4xl text-orange-500"></i>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-zinc-900/50 backdrop-blur p-6 rounded-3xl border border-zinc-800">
+              <h3 class="text-xl font-semibold mb-4">Check-ins Últimos 7 Días</h3>
+              <canvas id="attendanceChart" height="200"></canvas>
+            </div>
+            <div class="bg-zinc-900/50 backdrop-blur p-6 rounded-3xl border border-zinc-800">
+              <h3 class="text-xl font-semibold mb-4">Ingresos por Mes</h3>
+              <canvas id="incomeChart" height="200"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Members Page -->
+        <div id="page-members" class="hidden animate-fade-in">
+          <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
+            <h2 class="text-3xl font-bold">Gestión de Miembros</h2>
+            <button onclick="showAddMemberModal()" class="bg-gradient-to-r from-sky-600 to-blue-600 px-6 py-3 rounded-2xl flex items-center gap-2 hover:shadow-lg transition">
+              <i class="fas fa-plus"></i> Nuevo Miembro
+            </button>
+          </div>
+          
+          <div class="flex gap-4 mb-6">
+            <input type="text" id="searchInput" placeholder="Buscar por nombre o email..." onkeyup="filterMembers()" 
+                   class="flex-1 bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-4 focus:outline-none focus:border-sky-500">
+            <select id="planFilter" onchange="filterMembers()" class="bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-4">
+              <option value="">Todos los planes</option>
+              <option value="Básico">Básico</option>
+              <option value="Premium">Premium</option>
+              <option value="Anual">Anual</option>
+            </select>
+          </div>
+          
+          <div class="overflow-x-auto">
+            <table class="w-full bg-zinc-900/50 rounded-3xl overflow-hidden">
+              <thead class="bg-zinc-800">
+                <tr>
+                  <th class="p-5 text-left">QR</th>
+                  <th class="p-5 text-left">Nombre</th>
+                  <th class="p-5 text-left">Email</th>
+                  <th class="p-5 text-left">Teléfono</th>
+                  <th class="p-5 text-left">Plan</th>
+                  <th class="p-5 text-left">Estado</th>
+                  <th class="p-5 text-left">Vencimiento</th>
+                  <th class="p-5 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="membersTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Check-in Page -->
+<div id="page-checkin" class="hidden animate-fade-in">
+  <h2 class="text-3xl font-bold mb-8">Check-in con QR</h2>
+  
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <!-- Escáner QR -->
+    <div class="bg-zinc-900/50 backdrop-blur p-6 rounded-3xl border border-zinc-800">
+      <h3 class="text-xl font-semibold mb-4">Escanear Código QR</h3>
+      
+      <!-- Contenedor del escáner - SIN PADDING -->
+      <div class="qr-scanner bg-black rounded-2xl overflow-hidden" style="min-height: 350px; position: relative;">
+        <div id="reader" style="width: 100%; min-height: 350px;"></div>
+      </div>
+      
+      <div class="mt-4">
+        <input type="text" id="manualQRInput" placeholder="O ingresa código QR manualmente (ej: 1, 2, 3...)" 
+               class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3 focus:outline-none focus:border-sky-500">
+        <button onclick="processCheckin()" class="mt-3 w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-semibold transition">
+          <i class="fas fa-check-circle mr-2"></i> Registrar Check-in
+        </button>
+      </div>
+    </div>
+
+    <!-- Lista de Check-ins Hoy -->
+    <div class="bg-zinc-900/50 backdrop-blur p-6 rounded-3xl border border-zinc-800">
+      <h3 class="text-xl font-semibold mb-4">
+        Check-ins de Hoy 
+        <span class="text-sky-400" id="todayCount">0</span>
+      </h3>
+      <div id="todayCheckinsList" class="space-y-3 max-h-96 overflow-y-auto"></div>
+    </div>
+  </div>
+</div>
+
+        <!-- Payments Page -->
+        <div id="page-payments" class="hidden animate-fade-in">
+          <div class="flex justify-between items-center mb-6">
+            <h2 class="text-3xl font-bold">Gestión de Pagos</h2>
+            <button onclick="showPaymentModal()" class="bg-gradient-to-r from-emerald-600 to-green-600 px-6 py-3 rounded-2xl flex items-center gap-2">
+              <i class="fas fa-plus"></i> Nuevo Pago
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full bg-zinc-900/50 rounded-3xl overflow-hidden">
+              <thead class="bg-zinc-800">
+                <tr>
+                  <th class="p-5 text-left">Miembro</th>
+                  <th class="p-5 text-left">Plan</th>
+                  <th class="p-5 text-left">Monto</th>
+                  <th class="p-5 text-left">Fecha Pago</th>
+                  <th class="p-5 text-left">Vence</th>
+                  <th class="p-5 text-left">Estado</th>
+                  <th class="p-5 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="paymentsTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- WhatsApp Page -->
+        <div id="page-whatsapp" class="hidden animate-fade-in">
+          <h2 class="text-3xl font-bold mb-8">Comunicación WhatsApp</h2>
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2 bg-zinc-900/50 backdrop-blur p-6 rounded-3xl border border-zinc-800">
+              <h3 class="text-xl font-semibold mb-4">Enviar Mensaje Masivo</h3>
+              <select id="whatsappAudience" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3 mb-4">
+                <option value="all">Todos los miembros activos</option>
+                <option value="expiring">Miembros con membresía por vencer</option>
+                <option value="inactive">Miembros inactivos</option>
+              </select>
+              <textarea id="whatsappMessage" rows="5" placeholder="Escribe tu mensaje aquí..." 
+                        class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3 resize-none"></textarea>
+              <button onclick="sendWhatsAppMessages()" class="mt-4 w-full py-3 bg-green-600 hover:bg-green-500 rounded-2xl font-semibold transition">
+                <i class="fab fa-whatsapp mr-2"></i> Enviar Mensajes
+              </button>
+            </div>
+            <div class="bg-zinc-900/50 backdrop-blur p-6 rounded-3xl border border-zinc-800">
+              <h3 class="text-xl font-semibold mb-4">Plantillas Rápidas</h3>
+              <div class="space-y-3">
+                <button onclick="useTemplate('payment_reminder')" class="w-full text-left p-3 bg-zinc-800 rounded-xl hover:bg-zinc-700 transition">
+                  <i class="fas fa-bell mr-2 text-yellow-500"></i> Recordatorio de Pago
+                </button>
+                <button onclick="useTemplate('promotion')" class="w-full text-left p-3 bg-zinc-800 rounded-xl hover:bg-zinc-700 transition">
+                  <i class="fas fa-tag mr-2 text-blue-500"></i> Promoción Especial
+                </button>
+                <button onclick="useTemplate('renewal')" class="w-full text-left p-3 bg-zinc-800 rounded-xl hover:bg-zinc-700 transition">
+                  <i class="fas fa-sync mr-2 text-green-500"></i> Renovación de Membresía
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Members -->
+  <div id="memberModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-zinc-900 rounded-3xl p-8 w-full max-w-md border border-zinc-800">
+      <h3 class="text-2xl font-semibold mb-6" id="modalTitle">Nuevo Miembro</h3>
+      <form id="memberForm" class="space-y-5">
+        <input type="hidden" id="memberId">
+        <input type="text" id="name" placeholder="Nombre completo" required class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3 focus:outline-none focus:border-sky-500">
+        <input type="email" id="email" placeholder="Email" required class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3 focus:outline-none focus:border-sky-500">
+        <input type="tel" id="phone" placeholder="Teléfono" required class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3 focus:outline-none focus:border-sky-500">
+        <select id="plan" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3">
+          <option value="Básico">Básico - $299/mes</option>
+          <option value="Premium">Premium - $599/mes</option>
+          <option value="Anual">Anual - $3,999/año</option>
+        </select>
+        <div class="flex gap-4">
+          <button type="button" onclick="closeModal()" class="flex-1 py-3 border border-zinc-700 rounded-2xl hover:bg-zinc-800 transition">Cancelar</button>
+          <button type="submit" class="flex-1 py-3 bg-gradient-to-r from-sky-600 to-blue-600 rounded-2xl font-semibold transition">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Payment Modal -->
+  <div id="paymentModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-zinc-900 rounded-3xl p-8 w-full max-w-md border border-zinc-800">
+      <h3 class="text-2xl font-semibold mb-6">Registrar Pago</h3>
+      <form id="paymentForm" class="space-y-5">
+        <select id="paymentMemberId" required class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3">
+          <option value="">Seleccionar miembro</option>
+        </select>
+        <input type="number" id="paymentAmount" placeholder="Monto" required class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3">
+        <select id="paymentPlan" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3">
+          <option value="Básico">Básico</option>
+          <option value="Premium">Premium</option>
+          <option value="Anual">Anual</option>
+        </select>
+        <div class="flex gap-4">
+          <button type="button" onclick="closePaymentModal()" class="flex-1 py-3 border border-zinc-700 rounded-2xl">Cancelar</button>
+          <button type="submit" class="flex-1 py-3 bg-emerald-600 rounded-2xl font-semibold">Registrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- QR Modal -->
+  <div id="qrModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-zinc-900 rounded-3xl p-8 w-full max-w-sm text-center border border-zinc-800">
+      <h3 class="text-xl font-semibold mb-4">Código QR del Miembro</h3>
+      <div id="qrCodeContainer" class="flex justify-center mb-4"></div>
+      <p id="qrMemberName" class="text-zinc-400 mb-4"></p>
+      <button onclick="closeQRModal()" class="w-full py-3 bg-sky-600 rounded-2xl">Cerrar</button>
+    </div>
+  </div>
+
+  <script src="supabase-config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

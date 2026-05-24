@@ -1,0 +1,727 @@
+/* styles.css - NeoFit ERP Complete Styles */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,100..900;1,100..900&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: linear-gradient(135deg, #0f0f12 0%, #1a1a1f 100%);
+  color: #ffffff;
+  overflow-x: hidden;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1f1f24;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.animate-slide-left {
+  animation: slideInLeft 0.4s ease-out;
+}
+
+.animate-slide-right {
+  animation: slideInRight 0.4s ease-out;
+}
+
+/* Navigation Styles */
+.nav-active {
+  background: linear-gradient(135deg, #0284c7, #0369a1) !important;
+  color: white !important;
+  box-shadow: 0 4px 15px rgba(2, 132, 199, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.nav-active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    left: 100%;
+  }
+}
+
+/* Card Styles */
+.glass-card {
+  background: rgba(24, 24, 29, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  border-color: rgba(2, 132, 199, 0.3);
+}
+
+/* Button Styles */
+.btn-primary {
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  border: none;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(2, 132, 199, 0.4);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.btn-secondary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+.btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(239, 68, 68, 0.4);
+}
+
+/* Input Styles */
+.glass-input {
+  background: rgba(39, 39, 45, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.glass-input:focus {
+  outline: none;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
+  background: rgba(39, 39, 45, 1);
+}
+
+/* Table Styles */
+.glass-table {
+  background: rgba(24, 24, 29, 0.6);
+  backdrop-filter: blur(10px);
+  border-radius: 1.5rem;
+  overflow: hidden;
+}
+
+.glass-table thead {
+  background: linear-gradient(135deg, #1a1a1f, #16161a);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-table tbody tr {
+  transition: all 0.2s ease;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-table tbody tr:hover {
+  background: rgba(2, 132, 199, 0.1);
+  transform: scale(1.01);
+}
+
+/* Badge Styles */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  gap: 0.5rem;
+}
+
+.badge-premium {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: white;
+  box-shadow: 0 2px 10px rgba(139, 92, 246, 0.3);
+}
+
+.badge-annual {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+}
+
+.badge-basic {
+  background: linear-gradient(135deg, #6b7280, #4b5563);
+  color: white;
+}
+
+.badge-active {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+}
+
+.badge-expiring {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+  animation: pulse 2s infinite;
+}
+
+/* QR Scanner Styles */
+.qr-scanner-container {
+  position: relative;
+  background: #000;
+  border-radius: 1.5rem;
+  overflow: hidden;
+}
+
+.qr-scanner-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle, transparent 40%, rgba(0,0,0,0.5) 100%);
+  pointer-events: none;
+}
+
+.qr-scanner-line {
+  position: absolute;
+  top: 50%;
+  left: 10%;
+  width: 80%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #0284c7, #0ea5e9, #0284c7, transparent);
+  animation: scan 2s linear infinite;
+  transform: translateY(-50%);
+}
+
+@keyframes scan {
+  0% {
+    top: 20%;
+  }
+  50% {
+    top: 80%;
+  }
+  100% {
+    top: 20%;
+  }
+}
+
+/* Modal Styles */
+.modal-overlay {
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.3s ease-out;
+}
+
+.modal-content {
+  background: linear-gradient(135deg, #1f1f24, #18181d);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  animation: slideInRight 0.3s ease-out;
+}
+
+/* Loading Spinner */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(2, 132, 199, 0.3);
+  border-top-color: #0284c7;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Stats Cards */
+.stat-card {
+  background: linear-gradient(135deg, rgba(24, 24, 29, 0.9), rgba(20, 20, 25, 0.9));
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #0284c7, #0ea5e9, #0284c7);
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+}
+
+.stat-icon {
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, rgba(2, 132, 199, 0.2), rgba(2, 132, 199, 0.1));
+  border-radius: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+}
+
+/* Chart Containers */
+.chart-container {
+  background: rgba(24, 24, 29, 0.6);
+  backdrop-filter: blur(10px);
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.3s ease;
+}
+
+.chart-container:hover {
+  border-color: rgba(2, 132, 199, 0.3);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+/* WhatsApp Button */
+.whatsapp-button {
+  background: linear-gradient(135deg, #25D366, #128C7E);
+  transition: all 0.3s ease;
+}
+
+.whatsapp-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 10px 25px rgba(37, 211, 102, 0.4);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    left: -100%;
+    top: 0;
+    bottom: 0;
+    z-index: 1000;
+    transition: left 0.3s ease;
+  }
+  
+  .sidebar.mobile-open {
+    left: 0;
+  }
+  
+  .main-content {
+    margin-left: 0;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .table-container {
+    overflow-x: auto;
+  }
+  
+  .glass-table {
+    min-width: 600px;
+  }
+  
+  .modal-content {
+    margin: 1rem;
+    padding: 1.5rem;
+  }
+  
+  .qr-scanner-container {
+    min-height: 300px;
+  }
+}
+
+@media (max-width: 480px) {
+  .stat-card {
+    padding: 1rem;
+  }
+  
+  .stat-value {
+    font-size: 1.5rem;
+  }
+  
+  .button-text {
+    display: none;
+  }
+  
+  .icon-only {
+    margin: 0;
+  }
+}
+
+/* Toast Notification */
+.toast-notification {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background: linear-gradient(135deg, #1f1f24, #18181d);
+  border-left: 4px solid #10b981;
+  padding: 1rem 1.5rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  animation: slideInRight 0.3s ease-out;
+  z-index: 1100;
+}
+
+.toast-error {
+  border-left-color: #ef4444;
+}
+
+.toast-warning {
+  border-left-color: #f59e0b;
+}
+
+/* Print Styles */
+@media print {
+  .sidebar,
+  .nav-buttons,
+  .no-print {
+    display: none !important;
+  }
+  
+  .main-content {
+    margin: 0;
+    padding: 0;
+  }
+  
+  .glass-card,
+  .glass-table {
+    background: white;
+    color: black;
+    border: 1px solid #ddd;
+  }
+}
+
+/* Loading States */
+.loading-skeleton {
+  background: linear-gradient(90deg, #1f1f24 25%, #2a2a30 50%, #1f1f24 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Hover Effects */
+.hover-lift {
+  transition: transform 0.2s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+}
+
+.hover-glow {
+  transition: box-shadow 0.2s ease;
+}
+
+.hover-glow:hover {
+  box-shadow: 0 0 15px rgba(2, 132, 199, 0.5);
+}
+
+/* Custom Checkbox */
+.custom-checkbox {
+  width: 1.25rem;
+  height: 1.25rem;
+  background: rgba(39, 39, 45, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.custom-checkbox:checked {
+  background: #0284c7;
+  border-color: #0284c7;
+}
+
+/* Progress Bar */
+.progress-bar {
+  height: 0.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0284c7, #0ea5e9);
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: shimmer 2s infinite;
+}
+
+/* === ESTILOS PARA QUE EL VIDEO DEL ESCÁNER SEA VISIBLE === */
+#reader video {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 350px !important;
+  object-fit: cover !important;
+  display: block !important;
+  border-radius: 12px !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Ocultar botones y dashboard extra que a veces agrega la librería */
+#reader__dashboard_section_csr,
+#reader__dashboard_section {
+  display: none !important;
+}
+
+/* Asegurar que el contenedor tenga fondo oscuro */
+#reader {
+  background: #000 !important;
+  border-radius: 12px !important;
+}
+
+/* Responsive mejorado para NeoFit ERP */
+
+/* Móviles pequeños (320px - 480px) */
+@media (max-width: 480px) {
+  body {
+    font-size: 14px;
+  }
+  
+  /* Ajustes de padding general */
+  .p-8 {
+    padding: 1rem !important;
+  }
+  
+  /* Tarjetas de estadísticas */
+  .grid > div {
+    padding: 1rem !important;
+  }
+  
+  .text-5xl {
+    font-size: 1.5rem !important;
+  }
+  
+  /* Botones flotantes para móvil */
+  .floating-action-btn {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    z-index: 40;
+    width: 56px;
+    height: 56px;
+    border-radius: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  
+  /* Ocultar texto en botones móviles */
+  .hide-text-mobile span {
+    display: none;
+  }
+  
+  /* Ajustar modales */
+  .fixed.inset-0 .bg-zinc-900 {
+    margin: 1rem;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  
+  /* Inputs más cómodos para móvil */
+  input, select, textarea {
+    font-size: 16px !important;
+    padding: 0.75rem !important;
+  }
+  
+  /* Espaciado entre elementos */
+  .space-y-6 > * + * {
+    margin-top: 1rem;
+  }
+}
+
+/* Tablets (481px - 768px) */
+@media (min-width: 481px) and (max-width: 768px) {
+  .p-8 {
+    padding: 1.5rem !important;
+  }
+  
+  .grid {
+    gap: 1rem !important;
+  }
+  
+  .text-5xl {
+    font-size: 2rem !important;
+  }
+  
+  /* 2 columnas en tablets */
+  .grid-cols-1.md\:grid-cols-2 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* Landscape en móviles */
+@media (max-width: 768px) and (orientation: landscape) {
+  .sidebar {
+    width: 250px !important;
+  }
+  
+  .qr-scanner-container {
+    max-height: 60vh;
+  }
+  
+  /* Menú horizontal en landscape */
+  .mobile-menu-btn {
+    top: 0.5rem;
+    left: 0.5rem;
+  }
+}
+
+/* Pantallas táctiles */
+@media (hover: none) and (pointer: coarse) {
+  /* Aumentar área de click en botones */
+  button, 
+  .clickable {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Scroll suave */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Eliminar hover effects en táctil */
+  .hover\:bg-zinc-800:hover {
+    background-color: transparent;
+  }
+}
+
+/* Dark mode automático (opcional) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+  }
+}
+
+/* Pantallas de alta densidad */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .border {
+    border-width: 0.5px;
+  }
+}
+
+/* Mejoras para tablets en modo landscape */
+@media (min-width: 768px) and (max-width: 1024px) and (orientation: landscape) {
+  .sidebar {
+    width: 240px;
+  }
+  
+  .main-content {
+    margin-left: 240px;
+  }
+}
+
