@@ -1189,50 +1189,67 @@ async function quickCheckin(memberId) {
 async function loadTodayCheckins() {
   try {
     const client = window.supabaseClient();
-    if (!client) throw new Error('Supabase no disponible');
-    
+    if (!client) return;
+
     const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    const todayStr = `${year}-${month}-${day}`;
-    
+    const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+
     const { data, error } = await client
       .from('checkins')
       .select(`*, members (name, plan)`)
       .gte('checkin_time', `${todayStr} 00:00:00`)
       .order('checkin_time', { ascending: false });
-    
+
     if (error) throw error;
-    
+
     document.getElementById('todayCount').textContent = data?.length || 0;
-    
+
     const container = document.getElementById('todayCheckinsList');
     if (!container) return;
-    
+
     if (!data || data.length === 0) {
       container.innerHTML = '<div class="text-center p-8 text-zinc-400">No hay check-ins hoy</div>';
       return;
     }
-    
+
     container.innerHTML = data.map(c => {
-      let timeStr = '';
+      let timeStr = 'Hora no registrada';
+      
       if (c.checkin_time) {
-        const timePart = c.checkin_time.split(' ')[1];
-        if (timePart) {
-          const [hours, minutes] = timePart.split(':');
+        // Manejo más robusto de timestamp
+        const date = new Date(c.checkin_time);
+        if (!isNaN(date.getTime())) {
+          const hours = String(date.getHours()).padStart(2, '0');
+          const minutes = String(date.getMinutes()).padStart(2, '0');
           timeStr = `${hours}:${minutes}`;
+        } else {
+          // Fallback si viene como string
+          const timePart = c.checkin_time.toString().split(' ')[1] || c.checkin_time.toString().split('T')[1];
+          if (timePart) {
+            timeStr = timePart.substring(0, 5);
+          }
         }
       }
+
       return `
         <div class="flex items-center justify-between p-4 bg-zinc-800 rounded-2xl">
-          <div><p class="font-semibold">${escapeHtml(c.members?.name || 'Unknown')}</p><p class="text-sm text-zinc-400">${c.members?.plan || '-'}</p></div>
-          <div class="text-right"><p class="text-sm text-green-400"><i class="fas fa-clock mr-1"></i> ${timeStr || 'Hora no registrada'}</p></div>
+          <div>
+            <p class="font-semibold">${escapeHtml(c.members?.name || 'Unknown')}</p>
+            <p class="text-sm text-zinc-400">${c.members?.plan || '-'}</p>
+          </div>
+          <div class="text-right">
+            <p class="text-sm text-emerald-400">
+              <i class="fas fa-clock mr-1"></i> ${timeStr}
+            </p>
+          </div>
         </div>
       `;
     }).join('');
+
   } catch (error) {
-    console.error('Error loading checkins:', error);
+    console.error('Error loading today checkins:', error);
+    const container = document.getElementById('todayCheckinsList');
+    if (container) container.innerHTML = `<div class="text-red-400 p-4">Error al cargar check-ins</div>`;
   }
 }
 
@@ -2380,15 +2397,51 @@ document.addEventListener('DOMContentLoaded', () => {
   const modals = ['memberModal', 'paymentModal', 'qrModal'];
   modals.forEach(modalId => {
     const modal = document.getElementById(modalId);
-    if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) { if (modalId === 'memberModal') closeModal(); if (modalId === 'paymentModal') closePaymentModal(); if (modalId === 'qrModal') closeQRModal(); } });
+    if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) { 
+      if (modalId === 'memberModal') closeModal(); 
+      if (modalId === 'paymentModal') closePaymentModal(); 
+      if (modalId === 'qrModal') closeQRModal(); 
+    }});
   });
   
-  const checkAuthWithRetry = () => { if (window.supabaseReady && window.supabaseReady()) checkAuth(); else { console.log('⏳ Esperando Supabase...'); setTimeout(checkAuthWithRetry, 500); } };
+  const checkAuthWithRetry = () => { 
+    if (window.supabaseReady && window.supabaseReady()) checkAuth(); 
+    else { 
+      console.log('⏳ Esperando Supabase...'); 
+      setTimeout(checkAuthWithRetry, 500); 
+    } 
+  };
   checkAuthWithRetry();
   
-  window.addEventListener('online', () => { showToast('📡 Conexión restablecida', 'success'); if (currentUser) { loadDashboardData(); loadMembers(); loadPayments(); loadTodayCheckins(); } });
+  window.addEventListener('online', () => { 
+    showToast('📡 Conexión restablecida', 'success'); 
+    if (currentUser) { 
+      loadDashboardData(); 
+      loadMembers(); 
+      loadPayments(); 
+      loadTodayCheckins(); 
+    }
+  });
+  
   window.addEventListener('offline', () => showToast('⚠️ Sin conexión a internet', 'error'));
+
+  // ====================== AUTO REFRESH CHECK-INS ======================
+  // Se actualiza automáticamente cada 8 segundos cuando estás en la página de Check-in
+  setInterval(() => {
+    const checkinPage = document.getElementById('page-checkin');
+    if (checkinPage && !checkinPage.classList.contains('hidden')) {
+      loadTodayCheckins();
+    }
+  }, 5000);
+
   console.log('✅ Aplicación inicializada correctamente');
 });
 
-document.addEventListener('visibilitychange', () => { if (!document.hidden && currentUser) { loadDashboardData(); loadMembers(); loadPayments(); loadTodayCheckins(); } });
+document.addEventListener('visibilitychange', () => { 
+  if (!document.hidden && currentUser) { 
+    loadDashboardData(); 
+    loadMembers(); 
+    loadPayments(); 
+    loadTodayCheckins(); 
+  }
+});
