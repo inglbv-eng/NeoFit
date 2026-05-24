@@ -582,6 +582,270 @@ body {
   border-radius: 12px !important;
 }
 
+/* ============ NUEVOS ESTILOS PARA PERFIL DE MIEMBROS Y CARDS ============ */
+
+/* Tab styles para el perfil */
+.tab-btn {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.tab-btn.active {
+  border-bottom-color: #0284c7 !important;
+  color: #38bdf8 !important;
+}
+
+/* Member cards */
+.member-card {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.member-card:hover {
+  transform: translateY(-2px);
+  border-color: #0284c7 !important;
+}
+
+/* Loading spinner para botones */
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+  margin-right: 8px;
+}
+
+/* Scroll suave para modales */
+#memberProfileModal {
+  scrollbar-width: thin;
+}
+
+/* Mejora para tabs en móvil */
+@media (max-width: 640px) {
+  .tab-btn {
+    font-size: 12px;
+    padding: 12px 16px;
+  }
+  
+  .member-card {
+    margin-bottom: 8px;
+  }
+  
+  /* Ajuste para modales en móvil */
+  #memberProfileModal .max-w-4xl {
+    margin: 10px;
+    max-height: 95vh;
+  }
+  
+  /* Botones de acción en cards */
+  .member-card .flex.justify-around {
+    gap: 8px;
+  }
+  
+  .member-card .flex.justify-around button {
+    flex: 1;
+  }
+}
+
+/* Efecto hover para filas de tabla */
+#membersTable tr {
+  transition: background 0.2s ease;
+}
+
+/* Animación para modales */
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+#memberProfileModal .bg-zinc-900,
+#addProgressModal .bg-zinc-900,
+#assignRoutineModal .bg-zinc-900 {
+  animation: scaleIn 0.2s ease-out;
+}
+
+/* Estilo para inputs con íconos */
+.relative i.absolute {
+  pointer-events: none;
+}
+
+/* Mejora para el gráfico de progreso */
+#progressChart {
+  max-height: 250px;
+  width: 100%;
+}
+
+/* Badge de días restantes */
+.days-left-badge {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
+/* Transición suave para cards y hover */
+#cardView > div {
+  transition: all 0.3s ease;
+}
+
+/* Fondo para el overlay de móvil */
+#mobileOverlay {
+  backdrop-filter: blur(4px);
+}
+
+/* Estilo para botones deshabilitados */
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Scroll personalizado para modales */
+#profilePaymentsList::-webkit-scrollbar,
+#progressHistory::-webkit-scrollbar,
+#profileCheckins::-webkit-scrollbar,
+#profileRoutines::-webkit-scrollbar {
+  width: 4px;
+}
+
+/* Mejora para inputs de tipo number */
+input[type="number"] {
+  -moz-appearance: textfield;
+  -webkit-appearance: textfield;
+  appearance: textfield;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  opacity: 0.5;
+}
+
+/* Estilos para vista previa de foto */
+#profilePhoto img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+#profilePhoto {
+  overflow: hidden;
+}
+
+/* Botón de cámara flotante */
+.camera-btn {
+  transition: all 0.2s ease;
+}
+
+.camera-btn:hover {
+  transform: scale(1.1);
+}
+
+/* Preview de foto en edición */
+.photo-preview {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #1f1f24;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: #0284c7;
+}
+
+/* Estilo para el contenedor del escáner QR */
+#reader {
+  background: #000;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* Efecto de escaneo visual */
+.qr-scanner {
+  position: relative;
+}
+
+.qr-scanner::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 2px solid #0284c7;
+  border-radius: 16px;
+  pointer-events: none;
+  animation: pulseBorder 2s infinite;
+}
+
+@keyframes pulseBorder {
+  0%, 100% {
+    border-color: #0284c7;
+    box-shadow: 0 0 0 0 rgba(2, 132, 199, 0.4);
+  }
+  50% {
+    border-color: #0ea5e9;
+    box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.2);
+  }
+}
+
+/* Responsive para la vista de cards */
+@media (max-width: 640px) {
+  #cardView {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  #cardView {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* Estilo para el botón de toggle vista */
+#tableViewBtn, #cardViewBtn {
+  transition: all 0.2s ease;
+}
+
+/* Mejora para el header del perfil */
+.bg-gradient-to-r.from-sky-900\/50.to-blue-900\/50 {
+  background: linear-gradient(135deg, rgba(2, 132, 199, 0.3), rgba(59, 130, 246, 0.3));
+}
+
+/* Estilo para los selects en móvil */
+@media (max-width: 640px) {
+  select, input, textarea {
+    font-size: 16px !important;
+  }
+  
+  .gap-3 {
+    gap: 8px;
+  }
+  
+  .flex-col.md\:flex-row {
+    flex-direction: column;
+  }
+  
+  .flex-col.md\:flex-row .flex.gap-3 {
+    width: 100%;
+  }
+  
+  .flex-col.md\:flex-row .flex.gap-3 select,
+  .flex-col.md\:flex-row .flex.gap-3 button {
+    flex: 1;
+  }
+}
+
 /* Responsive mejorado para NeoFit ERP */
 
 /* Móviles pequeños (320px - 480px) */

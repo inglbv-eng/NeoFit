@@ -1,4 +1,4 @@
-// app.js - NeoFit ERP Complete System (VERSIÓN CORREGIDA)
+// app.js - NeoFit ERP Complete System (VERSIÓN PROFESIONAL CON PERFIL COMPLETO)
 let currentUser = null;
 let allMembers = [];
 let html5QrCode = null;
@@ -7,6 +7,11 @@ let incomeChart = null;
 let appInitialized = false;
 let qrProcessing = false;
 let scannerStarting = false;
+
+// Variables para perfil
+let currentProfileMember = null;
+let progressChart = null;
+let currentView = 'table'; // 'table' o 'card'
 
 // ============ UTILITIES ============
 function escapeHtml(text) {
@@ -22,6 +27,15 @@ function formatDate(dateString) {
   return date.toLocaleDateString('es-MX');
 }
 
+function formatDateTime(dateTimeString) {
+  if (!dateTimeString) return '-';
+  if (dateTimeString.includes(' ')) {
+    const [date, time] = dateTimeString.split(' ');
+    return `${formatDate(date)} ${time.slice(0,5)}`;
+  }
+  return formatDate(dateTimeString);
+}
+
 function isExpiringSoon(dateString) {
   if (!dateString) return false;
   const expiry = new Date(dateString);
@@ -30,13 +44,33 @@ function isExpiringSoon(dateString) {
   return diffDays <= 7 && diffDays >= 0;
 }
 
+function getDaysLeft(dateString) {
+  if (!dateString) return 0;
+  const expiry = new Date(dateString);
+  const today = new Date();
+  return Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+}
+
+function getPlanClass(plan) {
+  switch(plan) {
+    case 'Premium': return 'bg-purple-900/50 text-purple-300';
+    case 'Anual': return 'bg-blue-900/50 text-blue-300';
+    default: return 'bg-gray-800 text-gray-300';
+  }
+}
+
+function getPlanIcon(plan) {
+  switch(plan) {
+    case 'Premium': return '⭐';
+    case 'Anual': return '🏆';
+    default: return '💪';
+  }
+}
+
 // ============ TOAST NOTIFICATIONS ============
 function showToast(message, type = 'success') {
-  // Eliminar toast existente
   const existingToast = document.querySelector('.toast-notification');
-  if (existingToast) {
-    existingToast.remove();
-  }
+  if (existingToast) existingToast.remove();
   
   const toast = document.createElement('div');
   toast.className = `toast-notification fixed bottom-4 right-4 z-50 px-6 py-3 rounded-2xl shadow-lg animate-fade-in ${
@@ -54,11 +88,8 @@ function showToast(message, type = 'success') {
   toast.innerHTML = `<i class="fas ${icon} mr-2"></i>${message}`;
   document.body.appendChild(toast);
   
-  // Auto-remover después de 3 segundos
   setTimeout(() => {
-    if (toast && toast.remove) {
-      toast.remove();
-    }
+    if (toast && toast.remove) toast.remove();
   }, 3000);
 }
 
@@ -132,7 +163,6 @@ function checkAuth() {
   const user = localStorage.getItem('user');
   
   if (!window.supabaseReady()) {
-    // Esperar a que Supabase esté listo
     window.onSupabaseReady(() => {
       if (localStorage.getItem('user')) {
         currentUser = JSON.parse(localStorage.getItem('user'));
@@ -150,7 +180,6 @@ function checkAuth() {
   }
 }
 
-// Nueva función para inicializar todos los datos
 async function initializeAppData() {
   showToast('Cargando datos...', 'info');
   await loadDashboardData();
@@ -158,6 +187,7 @@ async function initializeAppData() {
   await loadPayments();
   await loadTodayCheckins();
   startQRScanner();
+  loadSavedView();
   showToast('Datos cargados correctamente');
 }
 
@@ -197,14 +227,12 @@ async function loadDashboardData() {
     const client = window.supabaseClient();
     if (!client) throw new Error('Supabase no disponible');
     
-    // Active members count
     const { count: activeCount } = await client
       .from('members')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active');
     document.getElementById('activeMembers').textContent = activeCount || 0;
     
-    // Monthly income
     const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
     const { data: payments } = await client
       .from('payments')
@@ -214,7 +242,6 @@ async function loadDashboardData() {
     const monthlyTotal = payments?.reduce((sum, p) => sum + parseFloat(p.amount), 0) || 0;
     document.getElementById('monthlyIncome').textContent = `$${monthlyTotal.toLocaleString()}`;
     
-    // Today's checkins
     const today = new Date().toISOString().split('T')[0];
     const { count: checkinsCount } = await client
       .from('checkins')
@@ -222,7 +249,6 @@ async function loadDashboardData() {
       .gte('checkin_time', today);
     document.getElementById('todayCheckins').textContent = checkinsCount || 0;
     
-    // Expiring members (7 days)
     const expiringDate = new Date();
     expiringDate.setDate(expiringDate.getDate() + 7);
     const { count: expiringCount } = await client
@@ -232,7 +258,6 @@ async function loadDashboardData() {
       .gte('membership_end', new Date().toISOString().split('T')[0]);
     document.getElementById('expiringMembers').textContent = expiringCount || 0;
     
-    // Load charts
     await loadCharts();
   } catch (error) {
     console.error('Error loading dashboard:', error);
@@ -245,11 +270,24 @@ async function loadCharts() {
     const client = window.supabaseClient();
     if (!client) throw new Error('Supabase no disponible');
     
-    // Destroy existing charts
-    if (attendanceChart) attendanceChart.destroy();
-    if (incomeChart) incomeChart.destroy();
+    // Destruir charts de forma SEGURA (corregido)
+    if (attendanceChart) {
+      try {
+        attendanceChart.destroy();
+      } catch(e) {
+        console.warn('Error destroying attendanceChart:', e);
+      }
+      attendanceChart = null;
+    }
+    if (incomeChart) {
+      try {
+        incomeChart.destroy();
+      } catch(e) {
+        console.warn('Error destroying incomeChart:', e);
+      }
+      incomeChart = null;
+    }
     
-    // Attendance chart - last 7 days
     const last7Days = [];
     for (let i = 6; i >= 0; i--) {
       const date = new Date();
@@ -287,7 +325,6 @@ async function loadCharts() {
       options: { responsive: true, maintainAspectRatio: true }
     });
     
-    // Income chart - last 6 months (CORREGIDO)
     const months = [];
     const incomeData = [];
     const currentDate = new Date();
@@ -297,7 +334,6 @@ async function loadCharts() {
       const monthStr = date.toISOString().slice(0, 7);
       months.push(date.toLocaleString('es', { month: 'short' }));
       
-      // Calcular el primer y último día del mes correctamente
       const firstDay = `${monthStr}-01`;
       const lastDayDate = new Date(date.getFullYear(), date.getMonth() + 1, 0);
       const lastDay = `${monthStr}-${lastDayDate.getDate()}`;
@@ -353,7 +389,27 @@ async function loadMembers(filtered = null) {
     const { data, error } = await query;
     if (error) throw error;
     
-    allMembers = data || [];
+    let members = data || [];
+    
+    if (filtered && filtered.status && filtered.status !== '') {
+      const today = new Date();
+      const expiringDate = new Date();
+      expiringDate.setDate(expiringDate.getDate() + 7);
+      
+      members = members.filter(m => {
+        const expiryDate = new Date(m.membership_end);
+        if (filtered.status === 'active') {
+          return expiryDate >= today;
+        } else if (filtered.status === 'expired') {
+          return expiryDate < today;
+        } else if (filtered.status === 'expiring') {
+          return expiryDate >= today && expiryDate <= expiringDate;
+        }
+        return true;
+      });
+    }
+    
+    allMembers = members;
     renderMembersTable(allMembers);
   } catch (error) {
     console.error('Error loading members:', error);
@@ -363,92 +419,222 @@ async function loadMembers(filtered = null) {
 
 function renderMembersTable(members) {
   const tbody = document.getElementById('membersTable');
+  const cardContainer = document.getElementById('cardView');
+  const membersCount = document.getElementById('membersCount');
+  
   if (!tbody) return;
+  if (membersCount) membersCount.textContent = members.length;
   
   if (!members || members.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center p-8 text-zinc-400">No hay miembros registrados</td></tr>';
+    const emptyMessage = `
+      <tr><td colspan="6" class="text-center p-12 text-zinc-400">
+        <i class="fas fa-users text-5xl mb-3 opacity-50"></i>
+        <p>No hay miembros registrados</p>
+        <button onclick="showAddMemberModal()" class="mt-3 text-sky-400 hover:text-sky-300">+ Crear primer miembro</button>
+      </td>
+      </tr>
+    `;
+    tbody.innerHTML = emptyMessage;
+    if (cardContainer) cardContainer.innerHTML = '<div class="col-span-full text-center p-12 text-zinc-400">No hay miembros registrados</div>';
     return;
   }
   
-  tbody.innerHTML = members.map(m => `
-    <tr class="border-b border-zinc-800 hover:bg-zinc-800/50 transition">
-      <td class="p-5">
-        <button onclick="showQR(${m.id}, '${escapeHtml(m.name || '')}')" class="text-sky-400 hover:text-sky-300" title="Ver QR">
-          <i class="fas fa-qrcode text-xl"></i>
-        </button>
-      </td>
-      <td class="p-5 font-medium">${escapeHtml(m.name || '-')}</td>
-      <td class="p-5 text-zinc-400">${escapeHtml(m.email || '-')}</td>
-      <td class="p-5">${m.phone || '-'}</td>
-      <td class="p-5">
-        <span class="px-3 py-1 rounded-full text-xs font-semibold ${
-          m.plan === 'Premium' ? 'bg-purple-900/50 text-purple-300' :
-          m.plan === 'Anual' ? 'bg-blue-900/50 text-blue-300' :
-          'bg-gray-800 text-gray-300'
-        }">${m.plan || 'Básico'}</span>
-      </td>
-      <td class="p-5">
-        <span class="px-3 py-1 rounded-full text-xs font-semibold ${
-          m.status === 'active' ? 'bg-green-900/50 text-green-300' : 'bg-yellow-900/50 text-yellow-300'
-        }">
-          ${m.status === 'active' ? '✅ Activo' : '⚠️ Por vencer'}
-        </span>
-      </td>
-      <td class="p-5 text-sm text-zinc-400">${formatDate(m.membership_end)}</td>
-      <td class="p-5 text-center">
-        <button onclick="editMember(${m.id})" class="text-sky-400 hover:text-sky-300 mx-1" title="Editar">
-          <i class="fas fa-edit"></i>
-        </button>
-        <button onclick="deleteMember(${m.id})" class="text-red-400 hover:text-red-300 mx-1" title="Eliminar">
-          <i class="fas fa-trash"></i>
-        </button>
-        <button onclick="sendPaymentReminder(${m.id}, '${escapeHtml(m.name || '')}', '${m.phone || ''}')" class="text-green-400 hover:text-green-300 mx-1" title="WhatsApp">
-          <i class="fab fa-whatsapp"></i>
-        </button>
-      </td>
-    </tr>
-  `).join('');
+  // RENDER TABLA
+  tbody.innerHTML = members.map(m => {
+    const isActive = new Date(m.membership_end) >= new Date();
+    const daysLeft = getDaysLeft(m.membership_end);
+    const isExpiringSoon = daysLeft <= 7 && daysLeft >= 0;
+    const statusClass = isActive ? (isExpiringSoon ? 'bg-yellow-900/50 text-yellow-300' : 'bg-green-900/50 text-green-300') : 'bg-red-900/50 text-red-300';
+    const statusText = isActive ? (isExpiringSoon ? `⚠️ ${daysLeft} días` : '✅ Activo') : '❌ Vencido';
+    
+    return `
+      <tr class="border-b border-zinc-800 hover:bg-zinc-800/30 transition cursor-pointer" onclick="showMemberProfile(${m.id})">
+        <td class="p-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white font-semibold">
+              ${(m.name?.charAt(0) || '?').toUpperCase()}
+            </div>
+            <div>
+              <p class="font-medium">${escapeHtml(m.name || '-')}</p>
+              <p class="text-xs text-zinc-500">ID: ${m.id}</p>
+            </div>
+          </div>
+        </td>
+        <td class="p-4">
+          <p class="text-sm">${escapeHtml(m.email || '-')}</p>
+          <p class="text-xs text-zinc-500">${m.phone || '-'}</p>
+        </td>
+        <td class="p-4">
+          <span class="px-3 py-1 rounded-full text-xs font-semibold ${getPlanClass(m.plan)}">
+            ${getPlanIcon(m.plan)} ${m.plan || 'Básico'}
+          </span>
+        </td>
+        <td class="p-4">
+          <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusClass}">${statusText}</span>
+        </td>
+        <td class="p-4 text-sm">${formatDate(m.membership_end)}</td>
+        <td class="p-4 text-center">
+          <div class="flex justify-center gap-2">
+            <button onclick="event.stopPropagation(); quickCheckin(${m.id})" class="p-2 rounded-lg bg-green-600/20 text-green-400 hover:bg-green-600/40 transition" title="Check-in rápido">
+              <i class="fas fa-qrcode"></i>
+            </button>
+            <button onclick="event.stopPropagation(); showQR(${m.id}, '${escapeHtml(m.name || '')}')" class="p-2 rounded-lg bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 transition" title="Ver QR">
+              <i class="fas fa-qrcode"></i>
+            </button>
+            <button onclick="event.stopPropagation(); editMember(${m.id})" class="p-2 rounded-lg bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/40 transition" title="Editar">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button onclick="event.stopPropagation(); sendPaymentReminder(${m.id}, '${escapeHtml(m.name || '')}', '${m.phone || ''}')" class="p-2 rounded-lg bg-green-600/20 text-green-400 hover:bg-green-600/40 transition" title="WhatsApp">
+              <i class="fab fa-whatsapp"></i>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+  
+  // RENDER CARDS
+  if (cardContainer) {
+    cardContainer.innerHTML = members.map(m => {
+      const isActive = new Date(m.membership_end) >= new Date();
+      const daysLeft = getDaysLeft(m.membership_end);
+      const isExpiringSoon = daysLeft <= 7 && daysLeft >= 0;
+      const statusClass = isActive ? (isExpiringSoon ? 'bg-yellow-900/50 text-yellow-300' : 'bg-green-900/50 text-green-300') : 'bg-red-900/50 text-red-300';
+      const statusText = isActive ? (isExpiringSoon ? `⚠️ ${daysLeft} días` : '✅ Activo') : '❌ Vencido';
+      
+      return `
+        <div class="member-card bg-zinc-900/50 backdrop-blur rounded-2xl p-4 border border-zinc-800 hover:border-sky-500/50 transition" onclick="showMemberProfile(${m.id})">
+          <div class="flex items-start justify-between mb-3">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 rounded-full bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg">
+                ${(m.name?.charAt(0) || '?').toUpperCase()}
+              </div>
+              <div>
+                <h3 class="font-semibold">${escapeHtml(m.name || '-')}</h3>
+                <p class="text-xs text-zinc-500">ID: ${m.id}</p>
+              </div>
+            </div>
+            <span class="px-3 py-1 rounded-full text-xs font-semibold ${getPlanClass(m.plan)}">
+              ${getPlanIcon(m.plan)} ${m.plan || 'Básico'}
+            </span>
+          </div>
+          
+          <div class="space-y-2 mb-4">
+            <div class="flex items-center gap-2 text-sm"><i class="fas fa-envelope text-zinc-500 w-4"></i><span class="text-zinc-300">${escapeHtml(m.email || '-')}</span></div>
+            <div class="flex items-center gap-2 text-sm"><i class="fas fa-phone text-zinc-500 w-4"></i><span class="text-zinc-300">${m.phone || '-'}</span></div>
+            <div class="flex items-center gap-2 text-sm"><i class="fas fa-calendar text-zinc-500 w-4"></i><span class="text-zinc-300">Vence: ${formatDate(m.membership_end)}</span></div>
+            <div class="flex items-center gap-2"><span class="px-2 py-0.5 rounded-full text-xs ${statusClass}">${statusText}</span></div>
+          </div>
+          
+          <div class="flex justify-around pt-3 border-t border-zinc-800">
+            <button onclick="event.stopPropagation(); quickCheckin(${m.id})" class="flex flex-col items-center gap-1 text-green-400 hover:text-green-300 transition">
+              <i class="fas fa-qrcode text-lg"></i><span class="text-xs">Check-in</span>
+            </button>
+            <button onclick="event.stopPropagation(); showQR(${m.id}, '${escapeHtml(m.name || '')}')" class="flex flex-col items-center gap-1 text-sky-400 hover:text-sky-300 transition">
+              <i class="fas fa-qrcode text-lg"></i><span class="text-xs">QR</span>
+            </button>
+            <button onclick="event.stopPropagation(); editMember(${m.id})" class="flex flex-col items-center gap-1 text-yellow-400 hover:text-yellow-300 transition">
+              <i class="fas fa-edit text-lg"></i><span class="text-xs">Editar</span>
+            </button>
+            <button onclick="event.stopPropagation(); sendPaymentReminder(${m.id}, '${escapeHtml(m.name || '')}', '${m.phone || ''}')" class="flex flex-col items-center gap-1 text-green-400 hover:text-green-300 transition">
+              <i class="fab fa-whatsapp text-lg"></i><span class="text-xs">WhatsApp</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+  
+  updateViewDisplay();
 }
 
 function filterMembers() {
   const term = document.getElementById('searchInput')?.value || '';
   const plan = document.getElementById('planFilter')?.value || '';
-  loadMembers({ term, plan });
+  const status = document.getElementById('statusFilter')?.value || '';
+  loadMembers({ term, plan, status });
 }
 
-// ============ MEMBERS CRUD (CORREGIDO) ============
+function resetFilters() {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('planFilter').value = '';
+  document.getElementById('statusFilter').value = '';
+  loadMembers();
+}
+
+function toggleView() {
+  currentView = currentView === 'table' ? 'card' : 'table';
+  updateViewDisplay();
+  localStorage.setItem('membersView', currentView);
+  // Forzar re-renderizado de la vista (corregido)
+  if (allMembers.length > 0) {
+    renderMembersTable(allMembers);
+  }
+}
+
+function updateViewDisplay() {
+  const tableView = document.getElementById('tableView');
+  const cardView = document.getElementById('cardView');
+  const tableViewBtn = document.getElementById('tableViewBtn');
+  const cardViewBtn = document.getElementById('cardViewBtn');
+  
+  if (currentView === 'table') {
+    // Mostrar tabla, ocultar cards
+    tableView.classList.remove('hidden');
+    cardView.classList.add('hidden');
+    
+    // Estilos botones
+    tableViewBtn.classList.remove('text-zinc-400', 'bg-transparent');
+    tableViewBtn.classList.add('bg-sky-600', 'text-white', 'shadow-md');
+    cardViewBtn.classList.remove('bg-sky-600', 'text-white', 'shadow-md');
+    cardViewBtn.classList.add('text-zinc-400', 'bg-transparent');
+  } else {
+    // Mostrar cards, ocultar tabla
+    tableView.classList.add('hidden');
+    cardView.classList.remove('hidden');
+    
+    // Estilos botones
+    cardViewBtn.classList.remove('text-zinc-400', 'bg-transparent');
+    cardViewBtn.classList.add('bg-sky-600', 'text-white', 'shadow-md');
+    tableViewBtn.classList.remove('bg-sky-600', 'text-white', 'shadow-md');
+    tableViewBtn.classList.add('text-zinc-400', 'bg-transparent');
+  }
+}
+
+function loadSavedView() {
+  const savedView = localStorage.getItem('membersView');
+  if (savedView === 'card') {
+    currentView = 'card';
+  } else {
+    currentView = 'table';
+  }
+  updateViewDisplay();
+  // Forzar renderizado
+  if (allMembers.length > 0) {
+    renderMembersTable(allMembers);
+  }
+}
+
+// ============ MEMBERS CRUD ============
 async function saveMember(event) {
   event.preventDefault();
   
+  const memberId = document.getElementById('memberId').value;
   const name = document.getElementById('name').value;
   const email = document.getElementById('email').value;
   const phone = document.getElementById('phone').value;
   const plan = document.getElementById('plan').value;
-  const memberId = document.getElementById('memberId').value;
+  const birthDate = document.getElementById('birthDate').value;
+  const height = document.getElementById('height').value;
+  const emergencyContact = document.getElementById('emergencyContact').value;
+  const emergencyPhone = document.getElementById('emergencyPhone').value;
+  const healthNotes = document.getElementById('healthNotes').value;
+  const goals = document.getElementById('goals').value;
   
-  // Validar campos
   if (!name || !email || !phone) {
     showToast('Por favor completa todos los campos', 'error');
     return;
   }
-  
-  // Calcular fecha de expiración
-  const expirationDate = new Date();
-  if (plan === 'Anual') {
-    expirationDate.setFullYear(expirationDate.getFullYear() + 1);
-  } else {
-    expirationDate.setMonth(expirationDate.getMonth() + 1);
-  }
-  
-  const memberData = {
-    name: name,
-    email: email,
-    phone: phone,
-    plan: plan,
-    status: 'active',  // Cambiar 'activo' por 'active' para consistencia
-    membership_end: expirationDate.toISOString().split('T')[0],  // Usar membership_end (como en loadMembers)
-    created_at: new Date().toISOString()
-  };
   
   try {
     const client = window.supabaseClient();
@@ -457,35 +643,86 @@ async function saveMember(event) {
     let result;
     
     if (memberId) {
-      // ACTUALIZAR miembro existente
+      // ACTUALIZAR - NO cambiar la fecha de expiración ni el status
+      const updateData = {
+        name: name,
+        email: email,
+        phone: phone,
+        plan: plan,
+        birth_date: birthDate || null,
+        height: height ? parseFloat(height) : null,
+        emergency_contact: emergencyContact || null,
+        emergency_phone: emergencyPhone || null,
+        health_notes: healthNotes || null,
+        goals: goals || null,
+        updated_at: new Date().toISOString()
+      };
+      
       result = await client
         .from('members')
-        .update(memberData)
+        .update(updateData)
         .eq('id', parseInt(memberId))
         .select();
+        
+      if (result.error) throw result.error;
+      showToast('Miembro actualizado correctamente', 'success');
+      
     } else {
       // CREAR nuevo miembro
+      const expirationDate = new Date();
+      if (plan === 'Anual') {
+        expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+      } else {
+        expirationDate.setMonth(expirationDate.getMonth() + 1);
+      }
+      
+      const memberData = {
+        name: name,
+        email: email,
+        phone: phone,
+        plan: plan,
+        status: 'active',
+        membership_end: expirationDate.toISOString().split('T')[0],
+        created_at: new Date().toISOString(),
+        birth_date: birthDate || null,
+        height: height ? parseFloat(height) : null,
+        emergency_contact: emergencyContact || null,
+        emergency_phone: emergencyPhone || null,
+        health_notes: healthNotes || null,
+        goals: goals || null
+      };
+      
       result = await client
         .from('members')
         .insert([memberData])
         .select();
+      
+      if (result.error) throw result.error;
+      
+      if (result.data && result.data[0]) {
+        const newMember = result.data[0];
+        await sendWelcomeWithQR(newMember);
+      }
     }
     
-    if (result.error) throw result.error;
-    
-    // ✅ Si es un miembro NUEVO (no edición), enviar bienvenida con QR
-    if (!memberId && result.data && result.data[0]) {
-      const newMember = result.data[0];
-      await sendWelcomeWithQR(newMember);
-    } else {
-      showToast('Miembro actualizado correctamente', 'success');
+    // Cerrar modal y recargar datos
+    const memberModal = document.getElementById('memberModal');
+    if (memberModal) {
+      memberModal.classList.add('hidden');
     }
     
-    closeModal();
     await loadMembers();
     await loadDashboardData();
-    document.getElementById('memberForm').reset();
-    document.getElementById('memberId').value = '';
+    
+    // Resetear formulario
+    const memberForm = document.getElementById('memberForm');
+    if (memberForm) {
+      memberForm.reset();
+    }
+    const memberIdField = document.getElementById('memberId');
+    if (memberIdField) {
+      memberIdField.value = '';
+    }
     
   } catch (error) {
     console.error('Error:', error);
@@ -493,16 +730,159 @@ async function saveMember(event) {
   }
 }
 
+// ============ SUBIR FOTO DE PERFIL ============
+async function uploadMemberPhoto() {
+  if (!currentProfileMember) {
+    showToast('No hay miembro seleccionado', 'error');
+    return;
+  }
+  
+  // Crear input de archivo oculto
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    // Validar tamaño (máx 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('La imagen no puede superar los 2MB', 'error');
+      return;
+    }
+    
+    // Validar tipo
+    if (!file.type.startsWith('image/')) {
+      showToast('Solo se permiten imágenes', 'error');
+      return;
+    }
+    
+    showToast('Subiendo foto...', 'info');
+    
+    try {
+      const client = window.supabaseClient();
+      if (!client) throw new Error('Supabase no disponible');
+      
+      // Generar nombre único para la foto
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${currentProfileMember.id}_${Date.now()}.${fileExt}`;
+      const filePath = `members/${fileName}`;
+      
+      // Subir a Supabase Storage
+      const { error: uploadError } = await client.storage
+        .from('member-photos')
+        .upload(filePath, file);
+      
+      if (uploadError) throw uploadError;
+      
+      // Obtener URL pública
+      const { data: urlData } = client.storage
+        .from('member-photos')
+        .getPublicUrl(filePath);
+      
+      const photoUrl = urlData.publicUrl;
+      
+      // Actualizar en la base de datos
+      const { error: updateError } = await client
+        .from('members')
+        .update({ photo_url: photoUrl })
+        .eq('id', currentProfileMember.id);
+      
+      if (updateError) throw updateError;
+      
+      // Actualizar UI
+      document.getElementById('profilePhoto').innerHTML = `<img src="${photoUrl}" class="w-32 h-32 rounded-full object-cover">`;
+      currentProfileMember.photo_url = photoUrl;
+      
+      showToast('Foto actualizada correctamente', 'success');
+      
+    } catch (error) {
+      console.error('Error subiendo foto:', error);
+      showToast('Error al subir la foto: ' + error.message, 'error');
+    }
+  };
+  
+  input.click();
+}
+
+// Función alternativa para foto sin Supabase Storage (usando Base64)
+async function uploadMemberPhotoBase64() {
+  if (!currentProfileMember) {
+    showToast('No hay miembro seleccionado', 'error');
+    return;
+  }
+  
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('La imagen no puede superar los 2MB', 'error');
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64String = reader.result;
+      
+      try {
+        const client = window.supabaseClient();
+        if (!client) throw new Error('Supabase no disponible');
+        
+        // Guardar Base64 directamente en la BD (no recomendado para muchas fotos)
+        const { error: updateError } = await client
+          .from('members')
+          .update({ photo_url: base64String })
+          .eq('id', currentProfileMember.id);
+        
+        if (updateError) throw updateError;
+        
+        document.getElementById('profilePhoto').innerHTML = `<img src="${base64String}" class="w-32 h-32 rounded-full object-cover">`;
+        currentProfileMember.photo_url = base64String;
+        
+        showToast('Foto actualizada correctamente', 'success');
+        
+      } catch (error) {
+        console.error('Error:', error);
+        showToast('Error al guardar la foto', 'error');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
 async function editMember(id) {
   const member = allMembers.find(m => m.id === id);
   if (!member) return;
   
+  console.log('Editando miembro:', member);
+  
   document.getElementById('modalTitle').textContent = 'Editar Miembro';
   document.getElementById('memberId').value = member.id;
-  document.getElementById('name').value = member.name;
+  document.getElementById('name').value = member.name || '';
   document.getElementById('email').value = member.email || '';
   document.getElementById('phone').value = member.phone || '';
-  document.getElementById('plan').value = member.plan;
+  document.getElementById('plan').value = member.plan || 'Básico';
+  
+  // Cargar campos adicionales
+  document.getElementById('birthDate').value = member.birth_date || '';
+  document.getElementById('height').value = member.height || '';
+  document.getElementById('emergencyContact').value = member.emergency_contact || '';
+  document.getElementById('emergencyPhone').value = member.emergency_phone || '';
+  document.getElementById('healthNotes').value = member.health_notes || '';
+  document.getElementById('goals').value = member.goals || '';
+  
+  // Si tienes foto, mostrar preview
+  if (member.photo_url) {
+    const photoContainer = document.getElementById('profilePhotoPreview');
+    if (photoContainer) {
+      photoContainer.innerHTML = `<img src="${member.photo_url}" class="w-20 h-20 rounded-full object-cover">`;
+    }
+  }
   
   document.getElementById('memberModal').classList.remove('hidden');
 }
@@ -553,7 +933,6 @@ async function processCheckin() {
     return;
   }
   
-  // Soporte para formato NEOFIT_ID o solo ID
   let memberId = qrInput.includes('_') ? qrInput.split('_')[1] : qrInput;
   
   if (!memberId || isNaN(parseInt(memberId))) {
@@ -576,7 +955,6 @@ async function processCheckin() {
       return;
     }
     
-    // Check if membership is expired
     const today = new Date();
     const expiryDate = new Date(member.membership_end);
     if (expiryDate < today) {
@@ -584,12 +962,23 @@ async function processCheckin() {
       return;
     }
     
-    // Register check-in
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const localDateTimeString = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    
     const { error: checkinError } = await client
       .from('checkins')
-      .insert([{ member_id: member.id, checkin_time: new Date().toISOString() }]);
+      .insert([{ member_id: member.id, checkin_time: localDateTimeString }]);
     
     if (checkinError) throw checkinError;
+    
+    // Actualizar último check-in en members
+    await client.from('members').update({ last_checkin: localDateTimeString }).eq('id', member.id);
     
     showToast(`✅ Check-in exitoso! Bienvenido ${member.name}`);
     document.getElementById('manualQRInput').value = '';
@@ -602,19 +991,70 @@ async function processCheckin() {
   }
 }
 
+async function quickCheckin(memberId) {
+  try {
+    const client = window.supabaseClient();
+    if (!client) throw new Error('Supabase no disponible');
+    
+    const { data: member, error } = await client
+      .from('members')
+      .select('*')
+      .eq('id', memberId)
+      .single();
+    
+    if (error || !member) {
+      showToast('Miembro no encontrado', 'error');
+      return;
+    }
+    
+    const expiryDate = new Date(member.membership_end);
+    if (expiryDate < new Date()) {
+      showToast(`⚠️ Membresía vencida desde ${formatDate(member.membership_end)}`, 'error');
+      return;
+    }
+    
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const localDateTimeString = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    
+    const { error: checkinError } = await client
+      .from('checkins')
+      .insert([{ member_id: member.id, checkin_time: localDateTimeString }]);
+    
+    if (checkinError) throw checkinError;
+    
+    await client.from('members').update({ last_checkin: localDateTimeString }).eq('id', member.id);
+    
+    showToast(`✅ Check-in rápido: ${member.name}`);
+    await loadTodayCheckins();
+    await loadDashboardData();
+    
+  } catch (error) {
+    console.error('Error en check-in rápido:', error);
+    showToast('Error al procesar check-in', 'error');
+  }
+}
+
 async function loadTodayCheckins() {
   try {
     const client = window.supabaseClient();
     if (!client) throw new Error('Supabase no disponible');
     
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+    
     const { data, error } = await client
       .from('checkins')
-      .select(`
-        *,
-        members (name, plan)
-      `)
-      .gte('checkin_time', today)
+      .select(`*, members (name, plan)`)
+      .gte('checkin_time', `${todayStr} 00:00:00`)
       .order('checkin_time', { ascending: false });
     
     if (error) throw error;
@@ -629,296 +1069,167 @@ async function loadTodayCheckins() {
       return;
     }
     
-    container.innerHTML = data.map(c => `
-      <div class="flex items-center justify-between p-4 bg-zinc-800 rounded-2xl">
-        <div>
-          <p class="font-semibold">${escapeHtml(c.members?.name || 'Unknown')}</p>
-          <p class="text-sm text-zinc-400">${c.members?.plan || '-'}</p>
+    container.innerHTML = data.map(c => {
+      let timeStr = '';
+      if (c.checkin_time) {
+        const timePart = c.checkin_time.split(' ')[1];
+        if (timePart) {
+          const [hours, minutes] = timePart.split(':');
+          timeStr = `${hours}:${minutes}`;
+        }
+      }
+      return `
+        <div class="flex items-center justify-between p-4 bg-zinc-800 rounded-2xl">
+          <div><p class="font-semibold">${escapeHtml(c.members?.name || 'Unknown')}</p><p class="text-sm text-zinc-400">${c.members?.plan || '-'}</p></div>
+          <div class="text-right"><p class="text-sm text-green-400"><i class="fas fa-clock mr-1"></i> ${timeStr || 'Hora no registrada'}</p></div>
         </div>
-        <div class="text-right">
-          <p class="text-sm text-green-400">
-            <i class="fas fa-clock mr-1"></i> ${new Date(c.checkin_time).toLocaleTimeString()}
-          </p>
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   } catch (error) {
     console.error('Error loading checkins:', error);
   }
 }
 
+// ============ QR SCANNER ============
 async function startQRScanner() {
-
-  // Evitar doble inicio
   if (scannerStarting) return;
-
   scannerStarting = true;
-
   console.log('📷 Iniciando escáner QR PRO...');
 
   try {
-
-    // =========================
-    // DETENER ESCÁNER ANTERIOR
-    // =========================
     if (html5QrCode) {
-
       try {
-
-        const state = html5QrCode.getState();
-
-        if (
-          state === Html5QrcodeScannerState.SCANNING ||
-          state === Html5QrcodeScannerState.PAUSED
-        ) {
-
-          await html5QrCode.stop();
-          await html5QrCode.clear();
-
-          console.log('🛑 Escáner anterior detenido');
-
-        }
-
+        await html5QrCode.stop();
+        await html5QrCode.clear();
+        console.log('🛑 Escáner anterior detenido');
       } catch (e) {
         console.warn('Error cerrando scanner:', e);
       }
     }
 
-    // =========================
-    // CONTENEDOR
-    // =========================
     const scannerElement = document.getElementById('reader');
-
     if (!scannerElement) {
       console.error('❌ No existe #reader');
+      scannerStarting = false;
       return;
     }
 
     scannerElement.innerHTML = '';
-
     scannerElement.style.minHeight = '350px';
     scannerElement.style.background = '#000';
     scannerElement.style.position = 'relative';
     scannerElement.style.borderRadius = '20px';
     scannerElement.style.overflow = 'hidden';
 
-    // =========================
-    // SOPORTE CÁMARA
-    // =========================
     if (!navigator.mediaDevices?.getUserMedia) {
-
-      scannerElement.innerHTML = `
-        <div class="text-center p-8 text-red-400">
-          <i class="fas fa-camera-slash text-5xl mb-3"></i>
-          <p>Tu navegador no soporta cámara</p>
-        </div>
-      `;
-
+      scannerElement.innerHTML = `<div class="text-center p-8 text-red-400"><i class="fas fa-camera-slash text-5xl mb-3"></i><p>Tu navegador no soporta cámara</p></div>`;
+      scannerStarting = false;
       return;
     }
 
-    // =========================
-    // LOADING
-    // =========================
-    scannerElement.innerHTML = `
-      <div class="flex flex-col items-center justify-center h-full p-8">
-        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-400 mb-4"></div>
-        <p class="text-zinc-400">
-          Iniciando cámara...
-        </p>
-      </div>
-    `;
+    scannerElement.innerHTML = `<div class="flex flex-col items-center justify-center h-full p-8"><div class="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-400 mb-4"></div><p class="text-zinc-400">Iniciando cámara...</p></div>`;
 
-    // =========================
-    // CREAR SCANNER
-    // =========================
     html5QrCode = new Html5Qrcode("reader");
 
-    // =========================
-    // SUCCESS
-    // =========================
-    const onScanSuccess = async (decodedText) => {
-
-      if (qrProcessing) return;
-
-      qrProcessing = true;
-
-      console.log('✅ QR detectado:', decodedText);
-
-      if (navigator.vibrate) {
-        navigator.vibrate(120);
-      }
-
-      const input = document.getElementById('manualQRInput');
-
-      if (input) {
-        input.value = decodedText;
-      }
-
+    function playBeepSound() {
       try {
-
-        await processCheckin();
-
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        oscillator.frequency.value = 880;
+        gainNode.gain.value = 0.3;
+        oscillator.start();
+        gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 0.3);
+        oscillator.stop(audioContext.currentTime + 0.3);
+        if (audioContext.state === 'suspended') audioContext.resume();
       } catch (e) {
+        try {
+          const audio = new Audio('data:audio/wav;base64,U3RlYWx0aCBzb3VuZA==');
+          audio.play().catch(() => {});
+        } catch (err) { console.log('Sonido no disponible'); }
+      }
+    }
 
+    const onScanSuccess = async (decodedText) => {
+      if (qrProcessing) return;
+      qrProcessing = true;
+      console.log('✅ QR detectado:', decodedText);
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      playBeepSound();
+      const input = document.getElementById('manualQRInput');
+      if (input) input.value = decodedText;
+      try {
+        await processCheckin();
+      } catch (e) {
         console.error(e);
-
+        showToast('Error al procesar check-in', 'error');
       } finally {
-
-        setTimeout(() => {
-          qrProcessing = false;
-        }, 2000);
+        setTimeout(() => { qrProcessing = false; }, 2000);
       }
     };
 
-    // =========================
-    // ERROR SCAN
-    // =========================
     const onScanError = (err) => {
-
+      // Ignorar errores comunes que NO afectan el funcionamiento
       if (
         err?.includes('NotFoundException') ||
-        err?.includes('No MultiFormat Readers')
+        err?.includes('No MultiFormat Readers') ||
+        err?.includes('source width is 0') ||
+        err?.includes('IndexSizeError')
       ) {
         return;
       }
-
-      console.warn('⚠️', err);
+      console.warn('⚠️ Error escáner:', err);
     };
 
-    // =========================
-    // CONFIG
-    // =========================
     const config = {
-
       fps: 12,
-
-      qrbox: {
-        width: 170,
-        height: 170
-      },
-
+      qrbox: { width: 170, height: 170 },
       aspectRatio: 1.0,
-
       disableFlip: false,
-
       rememberLastUsedCamera: true,
-
-      formatsToSupport: [
-        Html5QrcodeSupportedFormats.QR_CODE
-      ]
+      formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
     };
 
-    // =========================
-    // INICIAR
-    // =========================
-    await html5QrCode.start(
-
-      { facingMode: "environment" },
-
-      config,
-
-      onScanSuccess,
-
-      onScanError
-    );
-
+    await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanError);
     console.log('✅ Cámara iniciada');
 
-    // =========================
-    // OPTIMIZAR VIDEO
-    // =========================
     setTimeout(() => {
-
       const video = document.querySelector('#reader video');
-
-      if (track) {
-        const capabilities = track.getCapabilities();
-      
-        if (capabilities.zoom) {
-      
-          track.applyConstraints({
-            advanced: [{ zoom: 2 }]
-          }).catch(() => {});
-      
-          console.log('🔍 Zoom aplicado');
-        }
-      }
-      
       if (!video) return;
-
       video.style.display = 'block';
       video.style.width = '100%';
       video.style.height = '100%';
       video.style.objectFit = 'cover';
-
-      // Mejora webcams malas
-      video.style.filter =
-        'contrast(1.2) brightness(1.1) saturate(1.1)';
-
+      video.style.filter = 'contrast(1.2) brightness(1.1) saturate(1.1)';
       video.setAttribute('playsinline', true);
       video.setAttribute('autoplay', true);
       video.setAttribute('muted', true);
-
       video.play().catch(() => {});
-
-      console.log('🎥 Video optimizado');
-
+      const stream = video.srcObject;
+      const track = stream?.getVideoTracks()[0];
+      if (track && track.getCapabilities().zoom) {
+        track.applyConstraints({ advanced: [{ zoom: 2 }] }).catch(() => {});
+        console.log('🔍 Zoom aplicado');
+      }
     }, 500);
 
   } catch (err) {
-
     console.error('❌ Error total cámara:', err);
-
     const scannerElement = document.getElementById('reader');
-
     if (scannerElement) {
-
-      scannerElement.innerHTML = `
-        <div class="bg-yellow-900/30 rounded-2xl p-6 text-center border border-yellow-800 h-full flex flex-col justify-center">
-
-          <i class="fas fa-camera-slash text-5xl text-yellow-400 mb-4"></i>
-
-          <p class="text-white font-semibold text-lg mb-2">
-            No se pudo acceder a la cámara
-          </p>
-
-          <p class="text-zinc-400 text-sm mb-4">
-            ${err.message || 'Verifica permisos'}
-          </p>
-
-          <button
-            onclick="startQRScanner()"
-            class="px-4 py-3 bg-sky-600 hover:bg-sky-500 rounded-xl text-sm transition"
-          >
-            Reintentar
-          </button>
-
-        </div>
-      `;
+      scannerElement.innerHTML = `<div class="bg-yellow-900/30 rounded-2xl p-6 text-center border border-yellow-800 h-full flex flex-col justify-center"><i class="fas fa-camera-slash text-5xl text-yellow-400 mb-4"></i><p class="text-white font-semibold text-lg mb-2">No se pudo acceder a la cámara</p><p class="text-zinc-400 text-sm mb-4">${err.message || 'Verifica permisos'}</p><button onclick="startQRScanner()" class="px-4 py-3 bg-sky-600 hover:bg-sky-500 rounded-xl text-sm transition">Reintentar</button></div>`;
     }
-
   } finally {
-
     scannerStarting = false;
-
   }
 }
 
-// Función para solicitar permiso de cámara
 function requestCameraPermission() {
-  console.log('📷 Solicitando permiso de cámara...');
   navigator.mediaDevices.getUserMedia({ video: true })
-    .then(stream => {
-      console.log('✅ Permiso concedido');
-      stream.getTracks().forEach(track => track.stop());
-      showToast('✅ Permiso concedido, reiniciando escáner...', 'success');
-      startQRScanner();
-    })
-    .catch(err => {
-      console.error('❌ Permiso denegado:', err);
-      showToast('❌ Permiso de cámara denegado. Usa la entrada manual.', 'error');
-    });
+    .then(stream => { stream.getTracks().forEach(track => track.stop()); showToast('✅ Permiso concedido', 'success'); startQRScanner(); })
+    .catch(err => { showToast('❌ Permiso de cámara denegado', 'error'); });
 }
 
 // ============ PAYMENTS ============
@@ -929,10 +1240,7 @@ async function loadPayments() {
     
     const { data, error } = await client
       .from('payments')
-      .select(`
-        *,
-        members (name)
-      `)
+      .select(`*, members (name)`)
       .order('payment_date', { ascending: false });
     
     if (error) throw error;
@@ -952,22 +1260,14 @@ async function loadPayments() {
         <td class="p-5 font-semibold text-green-400">$${parseFloat(p.amount).toLocaleString()}</td>
         <td class="p-5 text-zinc-400">${formatDate(p.payment_date)}</td>
         <td class="p-5 ${isExpiringSoon(p.expiration_date) ? 'text-yellow-400' : 'text-zinc-400'}">${formatDate(p.expiration_date)}</td>
-        <td class="p-5">
-          <span class="px-3 py-1 rounded-full text-xs bg-green-900/50 text-green-300">${p.status}</span>
-        </td>
-        <td class="p-5 text-center">
-          <button onclick="sendPaymentReceipt(${p.id}, '${escapeHtml(p.members?.name)}', ${p.amount})" class="text-blue-400 hover:text-blue-300" title="Enviar recibo">
-            <i class="fas fa-receipt"></i>
-          </button>
-        </td>
+        <td class="p-5"><span class="px-3 py-1 rounded-full text-xs bg-green-900/50 text-green-300">${p.status}</span></td>
+        <td class="p-5 text-center"><button onclick="sendPaymentReceipt(${p.id}, '${escapeHtml(p.members?.name)}', ${p.amount})" class="text-blue-400 hover:text-blue-300" title="Enviar recibo"><i class="fas fa-receipt"></i></button></td>
       </tr>
     `).join('');
     
-    // Load member select for payment modal
     const memberSelect = document.getElementById('paymentMemberId');
     if (memberSelect && allMembers.length) {
-      memberSelect.innerHTML = '<option value="">Seleccionar miembro</option>' + 
-        allMembers.map(m => `<option value="${m.id}">${escapeHtml(m.name)} - ${m.plan}</option>`).join('');
+      memberSelect.innerHTML = '<option value="">Seleccionar miembro</option>' + allMembers.map(m => `<option value="${m.id}">${escapeHtml(m.name)} - ${m.plan}</option>`).join('');
     }
   } catch (error) {
     console.error('Error loading payments:', error);
@@ -982,15 +1282,8 @@ async function savePayment(event) {
   const amount = document.getElementById('paymentAmount').value;
   const plan = document.getElementById('paymentPlan').value;
   
-  if (!memberId) {
-    showToast('Selecciona un miembro', 'error');
-    return;
-  }
-  
-  if (!amount || amount <= 0) {
-    showToast('Ingresa un monto válido', 'error');
-    return;
-  }
+  if (!memberId) { showToast('Selecciona un miembro', 'error'); return; }
+  if (!amount || amount <= 0) { showToast('Ingresa un monto válido', 'error'); return; }
   
   const expirationDate = new Date();
   if (plan === 'Básico' || plan === 'Premium') expirationDate.setDate(expirationDate.getDate() + 30);
@@ -1000,28 +1293,15 @@ async function savePayment(event) {
     const client = window.supabaseClient();
     if (!client) throw new Error('Supabase no disponible');
     
-    // Register payment
     const { error: paymentError } = await client
       .from('payments')
-      .insert([{
-        member_id: parseInt(memberId),
-        amount: parseFloat(amount),
-        plan: plan,
-        payment_date: new Date().toISOString().split('T')[0],
-        expiration_date: expirationDate.toISOString().split('T')[0],
-        status: 'completed'
-      }]);
+      .insert([{ member_id: parseInt(memberId), amount: parseFloat(amount), plan: plan, payment_date: new Date().toISOString().split('T')[0], expiration_date: expirationDate.toISOString().split('T')[0], status: 'completed' }]);
     
     if (paymentError) throw paymentError;
     
-    // Update member membership
     const { error: memberError } = await client
       .from('members')
-      .update({
-        plan: plan,
-        membership_end: expirationDate.toISOString().split('T')[0],
-        status: 'active'
-      })
+      .update({ plan: plan, membership_end: expirationDate.toISOString().split('T')[0], status: 'active' })
       .eq('id', parseInt(memberId));
     
     if (memberError) throw memberError;
@@ -1042,102 +1322,308 @@ async function sendWhatsAppMessages() {
   const audience = document.getElementById('whatsappAudience').value;
   const message = document.getElementById('whatsappMessage').value;
   
-  if (!message) {
-    showToast('Escribe un mensaje primero', 'error');
-    return;
-  }
+  if (!message) { showToast('Escribe un mensaje primero', 'error'); return; }
   
   let members = [];
+  if (audience === 'all') members = allMembers.filter(m => m.status === 'active');
+  else if (audience === 'expiring') {
+    const expiringDate = new Date(); expiringDate.setDate(expiringDate.getDate() + 7);
+    members = allMembers.filter(m => m.membership_end && new Date(m.membership_end) <= expiringDate && new Date(m.membership_end) >= new Date());
+  } else if (audience === 'inactive') members = allMembers.filter(m => m.status !== 'active');
   
-  if (audience === 'all') {
-    members = allMembers.filter(m => m.status === 'active');
-  } else if (audience === 'expiring') {
-    const expiringDate = new Date();
-    expiringDate.setDate(expiringDate.getDate() + 7);
-    members = allMembers.filter(m => 
-      m.membership_end && new Date(m.membership_end) <= expiringDate && new Date(m.membership_end) >= new Date()
-    );
-  } else if (audience === 'inactive') {
-    members = allMembers.filter(m => m.status !== 'active');
-  }
+  if (members.length === 0) { showToast('No hay miembros en esta categoría', 'error'); return; }
   
-  if (members.length === 0) {
-    showToast('No hay miembros en esta categoría', 'error');
-    return;
-  }
-  
-  // Filter members with phone numbers
   const membersWithPhone = members.filter(m => m.phone && m.phone.trim());
-  
-  if (membersWithPhone.length === 0) {
-    showToast('No hay miembros con número de teléfono registrado', 'error');
-    return;
-  }
+  if (membersWithPhone.length === 0) { showToast('No hay miembros con número de teléfono', 'error'); return; }
   
   let sent = 0;
   for (const member of membersWithPhone) {
     let phone = member.phone.replace(/\s/g, '').replace(/[-()]/g, '');
-    if (!phone.startsWith('+')) {
-      phone = phone.startsWith('52') ? `+${phone}` : `+52${phone}`;
-    }
+    if (!phone.startsWith('+')) phone = phone.startsWith('52') ? `+${phone}` : `+52${phone}`;
     const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
     sent++;
     await new Promise(resolve => setTimeout(resolve, 500));
   }
-  
-  showToast(`Se abrieron ${sent} conversaciones de WhatsApp. Revisa las pestañas para enviar los mensajes.`);
+  showToast(`Se abrieron ${sent} conversaciones de WhatsApp`);
 }
 
 function useTemplate(template) {
   const templates = {
-    payment_reminder: "💰 *Recordatorio de Pago*\n\nHola, te recordamos que tu membresía está por vencer. ¡Renueva ahora y no pierdas tus beneficios!\n\nPara más información, contáctanos.\n\n🏋️‍♂️ NeoFit Gym",
-    promotion: "🎉 *Promoción Especial NeoFit*\n\n¡Lleva un amigo y ambos tienen 20% de descuento este mes!\n\nAprovecha esta oportunidad única. 💪\n\n🏋️‍♂️ NeoFit Gym",
-    renewal: "🔄 *Renovación de Membresía*\n\nTu membresía está activa. ¡Gracias por confiar en NeoFit!\n\nRecuerda que puedes pagar en línea o en nuestras instalaciones.\n\n🏋️‍♂️ NeoFit Gym"
+    payment_reminder: "💰 *Recordatorio de Pago*\n\nHola, te recordamos que tu membresía está por vencer. ¡Renueva ahora!\n\n🏋️‍♂️ NeoFit Gym",
+    promotion: "🎉 *Promoción Especial NeoFit*\n\n¡Lleva un amigo y ambos tienen 20% de descuento!\n\n🏋️‍♂️ NeoFit Gym",
+    renewal: "🔄 *Renovación de Membresía*\n\nTu membresía está activa. ¡Gracias por confiar en NeoFit!\n\n🏋️‍♂️ NeoFit Gym"
   };
-  
   document.getElementById('whatsappMessage').value = templates[template] || '';
 }
 
 function sendPaymentReminder(memberId, memberName, phone) {
-  if (!phone) {
-    showToast('Este miembro no tiene número de teléfono registrado', 'error');
-    return;
-  }
-  
+  if (!phone) { showToast('Este miembro no tiene número de teléfono', 'error'); return; }
   let cleanPhone = phone.replace(/\s/g, '').replace(/[-()]/g, '');
-  if (!cleanPhone.startsWith('+')) {
-    cleanPhone = cleanPhone.startsWith('52') ? `+${cleanPhone}` : `+52${cleanPhone}`;
-  }
-  
-  const message = `Hola ${memberName}, te recordamos que tu membresía está por vencer. ¡Renueva ahora en NeoFit! 💪\n\n🏋️‍♂️ NeoFit Gym`;
-  const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
-  window.open(whatsappUrl, '_blank');
+  if (!cleanPhone.startsWith('+')) cleanPhone = cleanPhone.startsWith('52') ? `+${cleanPhone}` : `+52${cleanPhone}`;
+  const message = `Hola ${memberName}, te recordamos que tu membresía está por vencer. ¡Renueva ahora en NeoFit! 💪`;
+  window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
 }
 
 function sendPaymentReceipt(paymentId, memberName, amount) {
-  if (!memberName) {
-    showToast('No se pudo obtener la información del miembro', 'error');
-    return;
-  }
-  
-  // Buscar el miembro para obtener su teléfono
   const member = allMembers.find(m => m.name === memberName);
-  if (!member || !member.phone) {
-    showToast('Este miembro no tiene número de teléfono registrado', 'error');
+  if (!member || !member.phone) { showToast('No se pudo obtener el teléfono', 'error'); return; }
+  let cleanPhone = member.phone.replace(/\s/g, '').replace(/[-()]/g, '');
+  if (!cleanPhone.startsWith('+')) cleanPhone = cleanPhone.startsWith('52') ? `+${cleanPhone}` : `+52${cleanPhone}`;
+  const message = `🧾 *Recibo de Pago - NeoFit*\n\nHola ${memberName},\n\nHemos recibido tu pago por $${amount} MXN.\n\n¡Gracias!`;
+  window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+}
+
+// ============ PERFIL COMPLETO DEL MIEMBRO ============
+async function showMemberProfile(memberId) {
+  const member = allMembers.find(m => m.id === memberId);
+  if (!member) return;
+  
+  currentProfileMember = member;
+  
+  document.getElementById('profileName').textContent = member.name;
+  document.getElementById('profileId').textContent = member.id;
+  document.getElementById('profilePlan').textContent = member.plan;
+  
+  // Mostrar foto si existe, si no mostrar inicial
+  const photoContainer = document.getElementById('profilePhoto');
+  if (member.photo_url) {
+    photoContainer.innerHTML = `<img src="${member.photo_url}" class="w-32 h-32 rounded-full object-cover">`;
+  } else {
+    const firstLetter = (member.name?.charAt(0) || '?').toUpperCase();
+    photoContainer.innerHTML = firstLetter;
+    photoContainer.className = "w-32 h-32 rounded-full bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-5xl font-bold text-white shadow-xl";
+  }
+  
+  const isActive = new Date(member.membership_end) >= new Date();
+  const statusEl = document.getElementById('profileStatus');
+  statusEl.textContent = isActive ? '✅ Activo' : '❌ Vencido';
+  statusEl.className = isActive ? 'px-3 py-1 rounded-full text-xs font-semibold bg-green-900/50 text-green-300' : 'px-3 py-1 rounded-full text-xs font-semibold bg-red-900/50 text-red-300';
+  
+  const qrContainer = document.getElementById('profileQR');
+  qrContainer.innerHTML = '';
+  new QRCode(qrContainer, { text: `NEOFIT_${member.id}`, width: 80, height: 80 });
+  
+  await loadMemberExtraData(member.id);
+  document.getElementById('memberProfileModal').classList.remove('hidden');
+}
+
+async function loadMemberExtraData(memberId) {
+  const client = window.supabaseClient();
+  if (!client) return;
+  
+  const member = currentProfileMember;
+  document.getElementById('infoName').textContent = member.name;
+  document.getElementById('infoEmail').textContent = member.email || '-';
+  document.getElementById('infoPhone').textContent = member.phone || '-';
+  document.getElementById('infoBirth').textContent = member.birth_date ? formatDate(member.birth_date) : '-';
+  document.getElementById('infoHeight').textContent = member.height ? `${member.height} cm` : '-';
+  document.getElementById('infoEmergencyContact').textContent = member.emergency_contact || '-';
+  document.getElementById('infoEmergencyPhone').textContent = member.emergency_phone || '-';
+  document.getElementById('infoGoals').textContent = member.goals || '-';
+  document.getElementById('infoHealthNotes').textContent = member.health_notes || '-';
+  document.getElementById('infoCurrentPlan').textContent = member.plan;
+  document.getElementById('infoExpiry').textContent = formatDate(member.membership_end);
+  
+  const daysLeft = getDaysLeft(member.membership_end);
+  const daysLeftEl = document.getElementById('infoDaysLeft');
+  daysLeftEl.textContent = daysLeft > 0 ? `${daysLeft} días` : 'Vencida';
+  daysLeftEl.className = daysLeft <= 7 && daysLeft > 0 ? 'font-medium text-yellow-400' : 'font-medium';
+  
+  if (member.last_checkin) document.getElementById('infoLastCheckin').textContent = formatDateTime(member.last_checkin);
+  
+  const { data: progress } = await client.from('member_progress').select('*').eq('member_id', memberId).order('date', { ascending: false }).limit(1);
+  if (progress && progress[0]) {
+    const last = progress[0];
+    document.getElementById('infoWeight').textContent = last.weight ? `${last.weight} kg` : '-';
+    document.getElementById('infoBodyFat').textContent = last.body_fat ? `${last.body_fat}%` : '-';
+    document.getElementById('infoMuscle').textContent = last.muscle_mass ? `${last.muscle_mass} kg` : '-';
+    if (last.weight && member.height) {
+      const heightM = member.height / 100;
+      const bmi = (last.weight / (heightM * heightM)).toFixed(1);
+      document.getElementById('infoBMI').textContent = bmi;
+    }
+  }
+  
+  await loadProfilePayments(memberId);
+  await loadProgressHistory(memberId);
+  await loadMemberRoutines(memberId);
+  await loadProfileCheckins(memberId);
+}
+
+async function loadProfilePayments(memberId) {
+  const client = window.supabaseClient();
+  if (!client) return;
+  const { data } = await client.from('payments').select('*').eq('member_id', memberId).order('payment_date', { ascending: false });
+  const container = document.getElementById('profilePaymentsList');
+  if (!data || data.length === 0) { container.innerHTML = '<div class="text-center p-8 text-zinc-400">No hay pagos registrados</div>'; return; }
+  container.innerHTML = data.map(p => `<div class="bg-zinc-800 rounded-xl p-4 flex justify-between items-center"><div><p class="font-semibold text-green-400">$${parseFloat(p.amount).toLocaleString()}</p><p class="text-sm text-zinc-400">${p.plan}</p></div><div class="text-right"><p class="text-sm">${formatDate(p.payment_date)}</p><p class="text-xs text-zinc-500">Vence: ${formatDate(p.expiration_date)}</p></div></div>`).join('');
+}
+
+async function loadProgressHistory(memberId) {
+  const client = window.supabaseClient();
+  if (!client) return;
+  const { data } = await client.from('member_progress').select('*').eq('member_id', memberId).order('date', { ascending: true });
+  const container = document.getElementById('progressHistory');
+  if (!data || data.length === 0) { container.innerHTML = '<div class="text-center p-8 text-zinc-400">No hay mediciones registradas</div>'; return; }
+  container.innerHTML = data.map(p => `<div class="bg-zinc-800 rounded-xl p-4"><div class="flex justify-between items-start mb-2"><p class="font-semibold">${formatDate(p.date)}</p><button onclick="deleteProgress(${p.id})" class="text-red-400 text-sm"><i class="fas fa-trash"></i></button></div><div class="grid grid-cols-2 gap-2 text-sm">${p.weight ? `<div>⚖️ Peso: ${p.weight} kg</div>` : ''}${p.body_fat ? `<div>🎯 Grasa: ${p.body_fat}%</div>` : ''}${p.muscle_mass ? `<div>💪 Músculo: ${p.muscle_mass} kg</div>` : ''}${p.chest ? `<div>📏 Pecho: ${p.chest} cm</div>` : ''}${p.waist ? `<div>📏 Cintura: ${p.waist} cm</div>` : ''}</div>${p.notes ? `<p class="text-xs text-zinc-400 mt-2">📝 ${p.notes}</p>` : ''}</div>`).join('');
+  createProgressChart(data);
+}
+
+function createProgressChart(progressData) {
+  const ctx = document.getElementById('progressChart')?.getContext('2d');
+  if (!ctx) return;
+  if (progressChart) progressChart.destroy();
+  const labels = progressData.map(p => formatDate(p.date));
+  const weights = progressData.map(p => p.weight);
+  const bodyFat = progressData.map(p => p.body_fat);
+  progressChart = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Peso (kg)', data: weights, borderColor: '#10b981', tension: 0.3, fill: false }, { label: 'Grasa corporal (%)', data: bodyFat, borderColor: '#f59e0b', tension: 0.3, fill: false }] }, options: { responsive: true, maintainAspectRatio: true } });
+}
+
+async function loadMemberRoutines(memberId) {
+  const client = window.supabaseClient();
+  if (!client) return;
+  const { data } = await client.from('routines').select('*').eq('member_id', memberId);
+  const container = document.getElementById('profileRoutines');
+  if (!data || data.length === 0) { container.innerHTML = '<div class="text-center p-8 text-zinc-400">No hay rutinas asignadas</div>'; return; }
+  container.innerHTML = data.map(r => `<div class="bg-zinc-800 rounded-xl p-4"><div class="flex justify-between items-center"><div><h4 class="font-semibold">${escapeHtml(r.name)}</h4><p class="text-sm text-zinc-400">${r.difficulty || 'Intermedio'} • ${r.days_per_week || 3} días/semana</p></div><button onclick="viewRoutine(${r.id})" class="text-sky-400"><i class="fas fa-eye"></i></button></div></div>`).join('');
+}
+
+async function loadProfileCheckins(memberId) {
+  const client = window.supabaseClient();
+  if (!client) return;
+  const { data } = await client.from('checkins').select('*').eq('member_id', memberId).order('checkin_time', { ascending: false }).limit(20);
+  const container = document.getElementById('profileCheckins');
+  if (!data || data.length === 0) { container.innerHTML = '<div class="text-center p-8 text-zinc-400">No hay check-ins registrados</div>'; return; }
+  container.innerHTML = data.map(c => `<div class="bg-zinc-800 rounded-xl p-3 flex justify-between items-center"><span>📅 ${formatDateTime(c.checkin_time)}</span><span class="text-green-400">✅ Asistió</span></div>`).join('');
+}
+
+function closeMemberProfile() { document.getElementById('memberProfileModal').classList.add('hidden'); currentProfileMember = null; }
+
+function showProfileTab(tab) {
+  const tabs = ['info', 'payments', 'progress', 'routines', 'checkins'];
+  tabs.forEach(t => {
+    document.getElementById(`${t}Tab`).classList.add('hidden');
+    const btn = document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}`);
+    if (btn) { btn.classList.remove('border-sky-500', 'text-sky-400'); btn.classList.add('text-zinc-400'); }
+  });
+  document.getElementById(`${tab}Tab`).classList.remove('hidden');
+  const activeBtn = document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`);
+  if (activeBtn) { activeBtn.classList.add('border-sky-500', 'text-sky-400'); activeBtn.classList.remove('text-zinc-400'); }
+}
+
+function quickCheckinFromProfile() {
+  if (!currentProfileMember || !currentProfileMember.id) {
+    showToast('Error: No se pudo obtener el miembro', 'error');
+    return;
+  }
+  quickCheckin(currentProfileMember.id);
+  setTimeout(() => closeMemberProfile(), 1000);
+}
+
+function sendWhatsAppToMember() {
+  if (!currentProfileMember || !currentProfileMember.id) {
+    showToast('Error: No se pudo obtener el miembro', 'error');
+    return;
+  }
+  if (currentProfileMember.phone) {
+    sendPaymentReminder(currentProfileMember.id, currentProfileMember.name, currentProfileMember.phone);
+  } else {
+    showToast('Miembro sin número de teléfono', 'error');
+  }
+}
+
+// ============ EDITAR MIEMBRO DESDE PERFIL (CORREGIDO) ============
+function editMemberFromProfile() {
+  if (!currentProfileMember) {
+    console.error('No hay miembro seleccionado para editar');
+    showToast('Error: No se pudo obtener el miembro', 'error');
     return;
   }
   
-  let cleanPhone = member.phone.replace(/\s/g, '').replace(/[-()]/g, '');
-  if (!cleanPhone.startsWith('+')) {
-    cleanPhone = cleanPhone.startsWith('52') ? `+${cleanPhone}` : `+52${cleanPhone}`;
+  if (!currentProfileMember.id) {
+    console.error('El miembro no tiene ID válido', currentProfileMember);
+    showToast('Error: ID de miembro inválido', 'error');
+    return;
   }
   
-  const message = `🧾 *Recibo de Pago - NeoFit*\n\nHola ${memberName},\n\nHemos recibido tu pago por $${amount} MXN.\n\n¡Gracias por confiar en nosotros!\n\n🏋️‍♂️ NeoFit Gym`;
-  const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
-  window.open(whatsappUrl, '_blank');
-  showToast('Abriendo WhatsApp para enviar el recibo');
+  const memberId = currentProfileMember.id;
+  console.log('Editando miembro desde perfil:', memberId);
+  
+  // Cerrar modal de perfil
+  closeMemberProfile();
+  
+  // Abrir modal de edición
+  editMember(memberId);
 }
+
+function showPaymentModalFromProfile() { if (currentProfileMember) { document.getElementById('paymentMemberId').value = currentProfileMember.id; showPaymentModal(); } }
+function downloadMemberQR() { const qrCanvas = document.querySelector('#profileQR canvas'); if (qrCanvas) { const link = document.createElement('a'); link.download = `QR_${currentProfileMember.name.replace(/\s/g, '_')}.png`; link.href = qrCanvas.toDataURL(); link.click(); } }
+function viewRoutine(routineId) { showToast('Detalles de rutina próximamente', 'info'); }
+
+// ============ PROGRESS MODAL ============
+document.addEventListener('DOMContentLoaded', () => {
+  const progressForm = document.getElementById('progressForm');
+  if (progressForm) {
+    progressForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!currentProfileMember) return;
+      const client = window.supabaseClient();
+      if (!client) return;
+      const progressData = {
+        member_id: currentProfileMember.id,
+        date: document.getElementById('progressDate').value || new Date().toISOString().split('T')[0],
+        weight: parseFloat(document.getElementById('progressWeight').value) || null,
+        body_fat: parseFloat(document.getElementById('progressBodyFat').value) || null,
+        muscle_mass: parseFloat(document.getElementById('progressMuscle').value) || null,
+        chest: parseFloat(document.getElementById('progressChest').value) || null,
+        waist: parseFloat(document.getElementById('progressWaist').value) || null,
+        notes: document.getElementById('progressNotes').value
+      };
+      const { error } = await client.from('member_progress').insert([progressData]);
+      if (error) showToast('Error al guardar progreso', 'error');
+      else { showToast('Progreso registrado', 'success'); closeProgressModal(); await loadProgressHistory(currentProfileMember.id); await loadMemberExtraData(currentProfileMember.id); }
+    });
+  }
+});
+
+function showAddProgressModal() { if (!currentProfileMember) return; document.getElementById('progressDate').value = new Date().toISOString().split('T')[0]; document.getElementById('progressForm').reset(); document.getElementById('addProgressModal').classList.remove('hidden'); }
+function closeProgressModal() { document.getElementById('addProgressModal').classList.add('hidden'); }
+
+async function deleteProgress(progressId) {
+  if (!confirm('¿Eliminar esta medición?')) return;
+  const client = window.supabaseClient();
+  if (!client) return;
+  const { error } = await client.from('member_progress').delete().eq('id', progressId);
+  if (error) showToast('Error al eliminar', 'error');
+  else { showToast('Medición eliminada', 'success'); await loadProgressHistory(currentProfileMember.id); await loadMemberExtraData(currentProfileMember.id); }
+}
+
+// ============ ROUTINE MODAL ============
+function showAssignRoutineModal() { document.getElementById('routineForm').reset(); document.getElementById('assignRoutineModal').classList.remove('hidden'); }
+function closeRoutineModal() { document.getElementById('assignRoutineModal').classList.add('hidden'); }
+
+document.addEventListener('DOMContentLoaded', () => {
+  const routineForm = document.getElementById('routineForm');
+  if (routineForm) {
+    routineForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!currentProfileMember) return;
+      const client = window.supabaseClient();
+      if (!client) return;
+      const routineData = {
+        member_id: currentProfileMember.id,
+        name: document.getElementById('routineName').value,
+        difficulty: document.getElementById('routineDifficulty').value,
+        days_per_week: parseInt(document.getElementById('routineDaysPerWeek').value),
+        created_at: new Date().toISOString()
+      };
+      const { error } = await client.from('routines').insert([routineData]);
+      if (error) showToast('Error al asignar rutina', 'error');
+      else { showToast('Rutina asignada', 'success'); closeRoutineModal(); await loadMemberRoutines(currentProfileMember.id); }
+    });
+  }
+});
 
 // ============ MODALS ============
 function showAddMemberModal() {
@@ -1152,113 +1638,119 @@ function showPaymentModal() {
   document.getElementById('paymentModal').classList.remove('hidden');
 }
 
-function closeModal() {
-  document.getElementById('memberModal').classList.add('hidden');
+function closeModal() { document.getElementById('memberModal').classList.add('hidden'); }
+function closePaymentModal() { document.getElementById('paymentModal').classList.add('hidden'); }
+
+// ============ QR WELCOME FUNCTIONS ============
+async function sendWelcomeWithQR(member) {
+  console.log('📨 Enviando bienvenida a:', member.name);
+  if (!member.phone) { showToast('⚠️ El miembro no tiene número de teléfono', 'warning'); return; }
+  try {
+    const qrImage = await generateQRCodeImage(member.id);
+    const message = createWelcomeMessage(member);
+    await sendWhatsAppWithQR(member.phone, message, qrImage, member);
+    showToast(`🎉 ${member.name} registrado y bienvenida enviada por WhatsApp!`, 'success');
+  } catch (error) { console.error('Error:', error); showToast(`✅ ${member.name} registrado`, 'warning'); }
 }
 
-function closePaymentModal() {
-  document.getElementById('paymentModal').classList.add('hidden');
+async function generateQRCodeImage(memberId) {
+  return new Promise((resolve, reject) => {
+    try {
+      const tempDiv = document.createElement('div');
+      new QRCode(tempDiv, { text: `NEOFIT_${memberId}`, width: 300, height: 300, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
+      setTimeout(() => {
+        const canvas = tempDiv.querySelector('canvas');
+        if (canvas) resolve(canvas.toDataURL('image/png'));
+        else { const fallbackCanvas = document.createElement('canvas'); fallbackCanvas.width = 300; fallbackCanvas.height = 300; const ctx = fallbackCanvas.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 300, 300); ctx.fillStyle = '#000000'; ctx.font = '20px Arial'; ctx.fillText('QR', 130, 160); resolve(fallbackCanvas.toDataURL('image/png')); }
+      }, 200);
+    } catch (error) { reject(error); }
+  });
 }
 
-// ============ DISPOSITIVO MOVIL ============
-function isMobile() {
-  return window.innerWidth <= 768;
+function createWelcomeMessage(member) {
+  const expirationDate = member.membership_end ? new Date(member.membership_end) : new Date();
+  const formattedDate = expirationDate.toLocaleDateString('es-MX');
+  let benefits = '', emoji = '💪';
+  if (member.plan === 'Básico') { emoji = '👍'; benefits = '✅ Acceso a área de pesas\n✅ Horario libre (6am-10pm)\n✅ Estacionamiento gratuito\n✅ Lockers sin costo'; }
+  else if (member.plan === 'Premium') { emoji = '⭐'; benefits = '✅ Acceso a área de pesas\n✅ Clases grupales ilimitadas\n✅ Asesoría nutricional mensual\n✅ Toalla de cortesía\n✅ Estacionamiento preferente\n✅ Acceso a spa y sauna'; }
+  else { emoji = '🏆'; benefits = '✅ TODOS los beneficios Premium\n✅ 2 meses gratis\n✅ Playera exclusiva NeoFit\n✅ 30% descuento en tienda\n✅ Invitación a evento anual\n✅ Seguimiento personalizado'; }
+  return `🎉 *¡BIENVENIDO A NEOFIT, ${member.name.toUpperCase()}!* 🎉\n\n${emoji} Tu membresía *${member.plan}* ha sido activada exitosamente.\n\n📅 *Fecha de vencimiento:* ${formattedDate}\n\n💪 *Beneficios incluidos:*\n${benefits}\n\n🎫 *Tu código QR está adjunto a este mensaje*\n📱 Guárdalo en tu teléfono o imprímelo\n🔍 Preséntalo en la entrada para escanear\n\n🏋️ *Dirección:* Av. Principal #123, Col. Centro\n⏰ *Horario:* Lunes a Sábado 6:00 - 22:00\n📞 *Contacto:* 55 1234 5678\n\n¡Te esperamos! 💪\n\n_NeoFit ERP - Tu mejor versión comienza aquí_`;
 }
+
+async function sendWhatsAppWithQR(phone, message, qrImageBase64, member) {
+  let cleanPhone = phone.toString().replace(/\D/g, '');
+  if (cleanPhone.length < 10) { console.warn('Número inválido:', cleanPhone); showToast('⚠️ Número inválido', 'warning'); return; }
+  if (cleanPhone.length === 10) cleanPhone = '52' + cleanPhone;
+  const fullMessage = message + '\n\n📲 *IMPORTANTE:* El código QR se ha descargado automáticamente en tu computadora.';
+  window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(fullMessage)}`, '_blank');
+  downloadQRImage(qrImageBase64, member.name);
+}
+
+function downloadQRImage(qrImageBase64, memberName) {
+  const link = document.createElement('a');
+  const safeName = memberName ? memberName.replace(/\s/g, '_') : 'miembro';
+  link.download = `QR_NeoFit_${safeName}.png`;
+  link.href = qrImageBase64;
+  link.click();
+}
+
+// ============ MOBILE MENU ============
+function isMobile() { return window.innerWidth <= 768; }
 
 function addMobileMenuButton() {
   if (document.querySelector('.mobile-menu-btn')) return;
-  
   const sidebar = document.querySelector('.w-72');
-  
   const menuBtn = document.createElement('button');
   menuBtn.className = 'mobile-menu-btn fixed top-4 left-4 z-50 bg-sky-600 p-3 rounded-2xl shadow-lg lg:hidden';
   menuBtn.innerHTML = '<i class="fas fa-bars text-xl"></i>';
   menuBtn.onclick = toggleMobileMenu;
-  
   document.body.appendChild(menuBtn);
-  
-  if (isMobile()) {
-    sidebar.style.position = 'fixed';
-    sidebar.style.left = '-100%';
-    sidebar.style.top = '0';
-    sidebar.style.bottom = '0';
-    sidebar.style.zIndex = '1000';
-    sidebar.style.transition = 'left 0.3s ease';
-    sidebar.style.overflowY = 'auto';
-  }
+  if (isMobile()) { sidebar.style.position = 'fixed'; sidebar.style.left = '-100%'; sidebar.style.top = '0'; sidebar.style.bottom = '0'; sidebar.style.zIndex = '1000'; sidebar.style.transition = 'left 0.3s ease'; sidebar.style.overflowY = 'auto'; }
 }
 
 function toggleMobileMenu() {
   const sidebar = document.querySelector('.w-72');
   const currentLeft = sidebar.style.left;
-  
-  if (currentLeft === '0px') {
-    sidebar.style.left = '-100%';
-    document.body.style.overflow = 'auto';
-  } else {
-    sidebar.style.left = '0';
-    document.body.style.overflow = 'hidden';
-  }
+  if (currentLeft === '0px') { sidebar.style.left = '-100%'; document.body.style.overflow = 'auto'; }
+  else { sidebar.style.left = '0'; document.body.style.overflow = 'hidden'; }
 }
 
 function closeMobileMenuOnClick() {
-  const links = document.querySelectorAll('.w-72 nav button');
-  links.forEach(link => {
-    link.addEventListener('click', () => {
-      if (isMobile()) {
-        const sidebar = document.querySelector('.w-72');
-        sidebar.style.left = '-100%';
-        document.body.style.overflow = 'auto';
-      }
-    });
-  });
+  document.querySelectorAll('.w-72 nav button').forEach(link => link.addEventListener('click', () => { if (isMobile()) { document.querySelector('.w-72').style.left = '-100%'; document.body.style.overflow = 'auto'; } }));
 }
 
 // ============ EVENT LISTENERS ============
 document.addEventListener('DOMContentLoaded', () => {
   console.log('🚀 Inicializando aplicación...');
-  
-  // Setup password toggle
   setupPasswordToggle();
-  
-  // Add mobile menu button
   addMobileMenuButton();
   closeMobileMenuOnClick();
   
-  // Login form
   const loginForm = document.getElementById('loginForm');
   if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const email = document.getElementById('loginEmail')?.value || '';
       const password = document.getElementById('loginPassword')?.value || '';
-      
-      if (!email || !password) {
-        showToast('Por favor ingresa email y contraseña', 'error');
-        return;
-      }
-      
-      // Mostrar loading en el botón
+      if (!email || !password) { showToast('Ingresa email y contraseña', 'error'); return; }
       const submitBtn = loginForm.querySelector('button[type="submit"]');
       const originalText = submitBtn.innerHTML;
       submitBtn.innerHTML = '<div class="loading-spinner"></div> Iniciando...';
       submitBtn.disabled = true;
-      
       await login(email, password);
-      
-      // Restaurar botón
       submitBtn.innerHTML = originalText;
       submitBtn.disabled = false;
     });
   }
   
-  // Member form
+  // Member form - VERSIÓN CORREGIDA (usa selector externo)
   const memberForm = document.getElementById('memberForm');
-  if (memberForm) {
+  const memberSubmitBtn = document.querySelector('button[form="memberForm"]');
+  
+  if (memberForm && memberSubmitBtn) {
     memberForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       
-      // Validar campos requeridos
       const name = document.getElementById('name')?.value;
       const email = document.getElementById('email')?.value;
       const phone = document.getElementById('phone')?.value;
@@ -1268,305 +1760,70 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       
-      // Mostrar loading
-      const submitBtn = memberForm.querySelector('button[type="submit"]');
-      const originalText = submitBtn.innerHTML;
-      submitBtn.innerHTML = '<div class="loading-spinner"></div> Guardando...';
-      submitBtn.disabled = true;
+      const originalText = memberSubmitBtn.innerHTML;
+      memberSubmitBtn.innerHTML = '<div class="loading-spinner"></div> Guardando...';
+      memberSubmitBtn.disabled = true;
       
-      await saveMember(e);
-      
-      // Restaurar botón
-      submitBtn.innerHTML = originalText;
-      submitBtn.disabled = false;
+      try {
+        await saveMember(e);
+      } catch (error) {
+        console.error('Error en submit:', error);
+        showToast('Error al guardar', 'error');
+      } finally {
+        memberSubmitBtn.innerHTML = originalText;
+        memberSubmitBtn.disabled = false;
+      }
     });
   }
-  
-  // Payment form
+
   const paymentForm = document.getElementById('paymentForm');
   if (paymentForm) {
     paymentForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      
-      // Validar campos requeridos
       const memberId = document.getElementById('paymentMemberId')?.value;
       const amount = document.getElementById('paymentAmount')?.value;
-      
-      if (!memberId) {
-        showToast('Selecciona un miembro', 'error');
-        return;
-      }
-      
-      if (!amount || amount <= 0) {
-        showToast('Ingresa un monto válido', 'error');
-        return;
-      }
-      
-      // Mostrar loading
+      if (!memberId) { showToast('Selecciona un miembro', 'error'); return; }
+      if (!amount || amount <= 0) { showToast('Ingresa un monto válido', 'error'); return; }
       const submitBtn = paymentForm.querySelector('button[type="submit"]');
       const originalText = submitBtn.innerHTML;
       submitBtn.innerHTML = '<div class="loading-spinner"></div> Registrando...';
       submitBtn.disabled = true;
-      
       await savePayment(e);
-      
-      // Restaurar botón
       submitBtn.innerHTML = originalText;
       submitBtn.disabled = false;
     });
   }
   
-  // Search input with debounce
   const searchInput = document.getElementById('searchInput');
   if (searchInput) {
     let debounceTimer;
-    searchInput.addEventListener('input', (e) => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        console.log('🔍 Buscando:', e.target.value);
-        filterMembers();
-      }, 500);
-    });
+    searchInput.addEventListener('input', (e) => { clearTimeout(debounceTimer); debounceTimer = setTimeout(() => filterMembers(), 500); });
   }
   
-  // Plan filter
   const planFilter = document.getElementById('planFilter');
-  if (planFilter) {
-    planFilter.addEventListener('change', () => {
-      filterMembers();
-    });
-  }
+  if (planFilter) planFilter.addEventListener('change', () => filterMembers());
   
-  // Modal close on escape key
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      const memberModal = document.getElementById('memberModal');
-      const paymentModal = document.getElementById('paymentModal');
-      const qrModal = document.getElementById('qrModal');
-      
-      if (memberModal && !memberModal.classList.contains('hidden')) {
-        closeModal();
-      }
-      if (paymentModal && !paymentModal.classList.contains('hidden')) {
-        closePaymentModal();
-      }
-      if (qrModal && !qrModal.classList.contains('hidden')) {
-        closeQRModal();
-      }
+      if (document.getElementById('memberModal') && !document.getElementById('memberModal').classList.contains('hidden')) closeModal();
+      if (document.getElementById('paymentModal') && !document.getElementById('paymentModal').classList.contains('hidden')) closePaymentModal();
+      if (document.getElementById('qrModal') && !document.getElementById('qrModal').classList.contains('hidden')) closeQRModal();
+      if (document.getElementById('memberProfileModal') && !document.getElementById('memberProfileModal').classList.contains('hidden')) closeMemberProfile();
     }
   });
   
-  // Click outside modal to close
   const modals = ['memberModal', 'paymentModal', 'qrModal'];
   modals.forEach(modalId => {
     const modal = document.getElementById(modalId);
-    if (modal) {
-      modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-          if (modalId === 'memberModal') closeModal();
-          if (modalId === 'paymentModal') closePaymentModal();
-          if (modalId === 'qrModal') closeQRModal();
-        }
-      });
-    }
+    if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) { if (modalId === 'memberModal') closeModal(); if (modalId === 'paymentModal') closePaymentModal(); if (modalId === 'qrModal') closeQRModal(); } });
   });
   
-  // Check auth on load (con retry si Supabase no está listo)
-  const checkAuthWithRetry = () => {
-    if (window.supabaseReady && window.supabaseReady()) {
-      checkAuth();
-    } else {
-      console.log('⏳ Esperando a que Supabase esté listo...');
-      setTimeout(checkAuthWithRetry, 500);
-    }
-  };
-  
+  const checkAuthWithRetry = () => { if (window.supabaseReady && window.supabaseReady()) checkAuth(); else { console.log('⏳ Esperando Supabase...'); setTimeout(checkAuthWithRetry, 500); } };
   checkAuthWithRetry();
   
-  // Detectar cambios de red
-  window.addEventListener('online', () => {
-    showToast('📡 Conexión restablecida', 'success');
-    if (currentUser) {
-      loadDashboardData();
-      loadMembers();
-      loadPayments();
-      loadTodayCheckins();
-    }
-  });
-  
-  window.addEventListener('offline', () => {
-    showToast('⚠️ Sin conexión a internet. Algunas funciones pueden no estar disponibles.', 'error');
-  });
-  
+  window.addEventListener('online', () => { showToast('📡 Conexión restablecida', 'success'); if (currentUser) { loadDashboardData(); loadMembers(); loadPayments(); loadTodayCheckins(); } });
+  window.addEventListener('offline', () => showToast('⚠️ Sin conexión a internet', 'error'));
   console.log('✅ Aplicación inicializada correctamente');
 });
 
-// Función adicional para manejar la visibilidad de la página (pestaña activa)
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && currentUser) {
-    // Recargar datos cuando el usuario vuelve a la pestaña
-    console.log('🔄 Recargando datos...');
-    loadDashboardData();
-    loadMembers();
-    loadPayments();
-    loadTodayCheckins();
-  }
-});
-
-// ===== FUNCIONES DE QR Y BIENVENIDA (CORREGIDAS) =====
-// Función principal que se ejecuta DESPUÉS de guardar el miembro
-async function sendWelcomeWithQR(member) {
-  console.log('📨 Enviando bienvenida a:', member.name);
-  
-  if (!member.phone) {
-    showToast('⚠️ El miembro no tiene número de teléfono. No se envió WhatsApp.', 'warning');
-    return;
-  }
-  
-  try {
-    // 1. Generar el código QR en formato imagen Base64
-    const qrImage = await generateQRCodeImage(member.id);
-    
-    // 2. Crear mensaje de WhatsApp con el QR
-    const message = createWelcomeMessage(member);
-    
-    // 3. Enviar por WhatsApp
-    await sendWhatsAppWithQR(member.phone, message, qrImage, member);
-    
-    // 4. Mostrar notificación en pantalla
-    showToast(`🎉 ${member.name} registrado y bienvenida enviada por WhatsApp!`, 'success');
-  } catch (error) {
-    console.error('Error al enviar bienvenida:', error);
-    showToast(`✅ ${member.name} registrado, pero hubo un error al enviar WhatsApp`, 'warning');
-  }
-}
-
-// Generar QR como imagen Base64 (para enviar por WhatsApp)
-async function generateQRCodeImage(memberId) {
-  return new Promise((resolve, reject) => {
-    try {
-      // Crear un div temporal para generar el QR
-      const tempDiv = document.createElement('div');
-      const qrCode = new QRCode(tempDiv, {
-        text: memberId.toString(),
-        width: 300,
-        height: 300,
-        colorDark: '#000000',
-        colorLight: '#ffffff',
-        correctLevel: QRCode.CorrectLevel.H
-      });
-      
-      // Esperar a que se genere y buscar el canvas
-      setTimeout(() => {
-        const canvas = tempDiv.querySelector('canvas');
-        if (canvas) {
-          const imageData = canvas.toDataURL('image/png');
-          resolve(imageData);
-        } else {
-          // Fallback: crear canvas manualmente
-          const fallbackCanvas = document.createElement('canvas');
-          fallbackCanvas.width = 300;
-          fallbackCanvas.height = 300;
-          const ctx = fallbackCanvas.getContext('2d');
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, 300, 300);
-          ctx.fillStyle = '#000000';
-          ctx.font = '20px Arial';
-          ctx.fillText('QR', 130, 160);
-          ctx.fillText(memberId.toString(), 100, 200);
-          resolve(fallbackCanvas.toDataURL('image/png'));
-        }
-      }, 200);
-    } catch (error) {
-      console.error('Error generando QR:', error);
-      reject(error);
-    }
-  });
-}
-
-// Crear mensaje personalizado de bienvenida
-function createWelcomeMessage(member) {
-  // Calcular fecha de vencimiento
-  const expirationDate = member.membership_end ? new Date(member.membership_end) : new Date();
-  const formattedDate = expirationDate.toLocaleDateString('es-MX');
-  
-  // Mensaje según el plan
-  let benefits = '';
-  let emoji = '💪';
-  
-  if (member.plan === 'Básico') {
-    emoji = '👍';
-    benefits = '✅ Acceso a área de pesas\n✅ Horario libre (6am-10pm)\n✅ Estacionamiento gratuito\n✅ Lockers sin costo';
-  } else if (member.plan === 'Premium') {
-    emoji = '⭐';
-    benefits = '✅ Acceso a área de pesas\n✅ Clases grupales ilimitadas\n✅ Asesoría nutricional mensual\n✅ Toalla de cortesía\n✅ Estacionamiento preferente\n✅ Acceso a spa y sauna';
-  } else {
-    emoji = '🏆';
-    benefits = '✅ TODOS los beneficios Premium\n✅ 2 meses gratis\n✅ Playera exclusiva NeoFit\n✅ 30% descuento en tienda\n✅ Invitación a evento anual\n✅ Seguimiento personalizado';
-  }
-  
-  return `🎉 *¡BIENVENIDO A NEOFIT, ${member.name.toUpperCase()}!* 🎉
-
-${emoji} Tu membresía *${member.plan}* ha sido activada exitosamente.
-
-📅 *Fecha de vencimiento:* ${formattedDate}
-
-💪 *Beneficios incluidos:*
-${benefits}
-
-🎫 *Tu código QR está adjunto a este mensaje*
-📱 Guárdalo en tu teléfono o imprímelo
-🔍 Preséntalo en la entrada para escanear
-
-🏋️ *Dirección:* Av. Principal #123, Col. Centro
-⏰ *Horario:* Lunes a Sábado 6:00 - 22:00
-📞 *Contacto:* 55 1234 5678
-
-¡Te esperamos para comenzar tu transformación! 💪
-
-_NeoFit ERP - Tu mejor versión comienza aquí_`;
-}
-
-// Enviar WhatsApp con imagen QR
-async function sendWhatsAppWithQR(phone, message, qrImageBase64, member) {
-  // Limpiar número de teléfono (solo números)
-  let cleanPhone = phone.toString().replace(/\D/g, '');
-  
-  // Validar que tenga al menos 10 dígitos
-  if (cleanPhone.length < 10) {
-    console.warn('Número inválido:', cleanPhone);
-    showToast('⚠️ Número de teléfono inválido, no se envió WhatsApp', 'warning');
-    return;
-  }
-  
-  // Agregar código de México (+52) si no tiene
-  if (cleanPhone.length === 10) {
-    cleanPhone = '52' + cleanPhone;
-  }
-  
-  // Mensaje completo (sin incluir el QR porque WhatsApp Web no permite adjuntar automáticamente)
-  const fullMessage = message + '\n\n📲 *IMPORTANTE:* El código QR se ha descargado automáticamente en tu computadora. Si estás en celular, descárgalo de tu perfil en el sistema.';
-  
-  // Crear URL de WhatsApp
-  const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(fullMessage)}`;
-  
-  // Abrir WhatsApp en nueva pestaña
-  window.open(whatsappUrl, '_blank');
-  
-  // Descargar QR automáticamente
-  downloadQRImage(qrImageBase64, member.name);
-  
-  console.log('📱 WhatsApp abierto para:', cleanPhone);
-  console.log('📥 QR descargado para:', member.name);
-}
-
-// Descargar QR automáticamente
-function downloadQRImage(qrImageBase64, memberName) {
-  const link = document.createElement('a');
-  const safeName = memberName ? memberName.replace(/\s/g, '_') : 'miembro';
-  const fileName = `QR_NeoFit_${safeName}.png`;
-  link.download = fileName;
-  link.href = qrImageBase64;
-  link.click();
-  console.log('✅ QR descargado:', fileName);
-}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && currentUser) { loadDashboardData(); loadMembers(); loadPayments(); loadTodayCheckins(); } });
