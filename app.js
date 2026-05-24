@@ -1742,24 +1742,51 @@ function closeMemberProfile() { document.getElementById('memberProfileModal').cl
 
 function showProfileTab(tab) {
   const tabs = ['info', 'payments', 'progress', 'routines', 'checkins', 'user'];
+  
+  // Ocultar todos los paneles de contenido
   tabs.forEach(t => {
     const tabEl = document.getElementById(`${t}Tab`);
     if (tabEl) tabEl.classList.add('hidden');
-    
-    const btn = document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}`);
-    if (btn) {
-      btn.classList.remove('border-sky-500', 'text-sky-400');
-      btn.classList.add('text-zinc-400');
-    }
   });
   
+  // Mostrar el panel seleccionado
   const activeTab = document.getElementById(`${tab}Tab`);
   if (activeTab) activeTab.classList.remove('hidden');
   
-  const activeBtn = document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`);
-  if (activeBtn) {
-    activeBtn.classList.add('border-sky-500', 'text-sky-400');
-    activeBtn.classList.remove('text-zinc-400');
+  // ========== ACTUALIZAR ESTADO DE BOTONES MÓVIL ==========
+  const mobileBtns = ['info', 'payments', 'progress', 'routines', 'checkins', 'user'];
+  mobileBtns.forEach(t => {
+    const mobileBtn = document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}Mobile`);
+    if (mobileBtn) {
+      mobileBtn.classList.remove('active');
+      // Resetear estilos internos si es necesario
+      const iconDiv = mobileBtn.querySelector('.w-12');
+      if (iconDiv && t !== tab) {
+        // Restaurar a estado no activo
+        iconDiv.style.background = '';
+      }
+    }
+  });
+  
+  const activeMobileBtn = document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}Mobile`);
+  if (activeMobileBtn) {
+    activeMobileBtn.classList.add('active');
+  }
+  
+  // ========== ACTUALIZAR ESTADO DE BOTONES PC ==========
+  const pcBtns = ['info', 'payments', 'progress', 'routines', 'checkins', 'user'];
+  pcBtns.forEach(t => {
+    const pcBtn = document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}`);
+    if (pcBtn) {
+      pcBtn.classList.remove('border-sky-500', 'text-sky-400');
+      pcBtn.classList.add('text-zinc-400');
+    }
+  });
+  
+  const activePcBtn = document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`);
+  if (activePcBtn) {
+    activePcBtn.classList.add('border-sky-500', 'text-sky-400');
+    activePcBtn.classList.remove('text-zinc-400');
   }
 }
 

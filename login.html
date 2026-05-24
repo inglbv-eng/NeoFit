@@ -2,18 +2,13 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover" />
   <title>NeoFit ERP - Acceso Premium</title>
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="img/icon.png">
   <link rel="shortcut icon" type="image/png" href="img/icon.png">
   <script src="https://cdn.tailwindcss.com"></script>
-
-  <link
-    rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"
-  />
-
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"/>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
 
   <style>
@@ -22,45 +17,46 @@
       padding: 0;
       box-sizing: border-box;
       scroll-behavior: smooth;
+      -webkit-tap-highlight-color: transparent;
     }
 
     body {
       overflow-x: hidden;
       font-family: "Inter", sans-serif;
       background: #050505;
+      min-height: 100vh;
     }
 
     .bg-gym {
       background:
         linear-gradient(
           to right,
-          rgba(0,0,0,.82),
-          rgba(0,0,0,.68)
+          rgba(0,0,0,.85),
+          rgba(0,0,0,.75)
         ),
         url('https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=1600&auto=format&fit=crop');
-
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
+      background-attachment: fixed;
     }
 
     .glass {
-      background: rgba(10,10,10,.68);
-      backdrop-filter: blur(18px);
-      border: 1px solid rgba(255,255,255,.06);
-      box-shadow: 0 10px 40px rgba(0,0,0,.45);
+      background: rgba(10,10,10,.72);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,.08);
+      box-shadow: 0 10px 40px rgba(0,0,0,.5);
     }
 
     .fade-up {
-      animation: fadeUp .9s ease;
+      animation: fadeUp .8s cubic-bezier(0.2, 0.9, 0.4, 1.1);
     }
 
     @keyframes fadeUp {
       from {
         opacity: 0;
-        transform: translateY(35px);
+        transform: translateY(30px);
       }
-
       to {
         opacity: 1;
         transform: translateY(0);
@@ -68,314 +64,441 @@
     }
 
     .hero-title {
-      line-height: .95;
+      line-height: 1.05;
     }
 
     .logo-glow {
-  filter:
-    drop-shadow(0 0 10px rgba(14,165,233,.45))
-    drop-shadow(0 0 25px rgba(14,165,233,.35))
-    drop-shadow(0 0 45px rgba(14,165,233,.25));
-}
+      filter: drop-shadow(0 0 12px rgba(14,165,233,.5))
+              drop-shadow(0 0 25px rgba(14,165,233,.3));
+    }
 
-.logo-float {
-  animation: floatLogo 3s ease-in-out infinite;
-}
+    .logo-float {
+      animation: floatLogo 3s ease-in-out infinite;
+    }
 
-@keyframes floatLogo {
-
-  0% {
-    transform: translateY(0px);
-  }
-
-  50% {
-    transform: translateY(-8px);
-  }
-
-  100% {
-    transform: translateY(0px);
-  }
-
-}
+    @keyframes floatLogo {
+      0% { transform: translateY(0px); }
+      50% { transform: translateY(-8px); }
+      100% { transform: translateY(0px); }
+    }
 
     .input-style {
       width: 100%;
-      background: rgba(255,255,255,.05);
-      border: 1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.1);
       color: white;
-      border-radius: 18px;
-      padding: 12px 16px;
-      transition: .3s ease;
+      border-radius: 20px;
+      padding: 14px 18px;
+      transition: all .25s ease;
+      font-size: 16px;
     }
 
     .input-style:focus {
       outline: none;
       border-color: #38bdf8;
-      box-shadow: 0 0 0 4px rgba(56,189,248,.12);
-      transform: scale(1.01);
+      box-shadow: 0 0 0 4px rgba(56,189,248,.15);
+      background: rgba(255,255,255,.1);
+    }
+
+    .input-style::placeholder {
+      color: rgba(255,255,255,0.3);
+      font-size: 14px;
     }
 
     .btn-login {
-      background: linear-gradient(
-        135deg,
-        #0ea5e9,
-        #2563eb
-      );
-
-      transition: .3s ease;
-      box-shadow: 0 10px 30px rgba(37,99,235,.35);
+      background: linear-gradient(135deg, #0ea5e9, #2563eb);
+      transition: all .25s ease;
+      box-shadow: 0 8px 24px rgba(37,99,235,.35);
+      border-radius: 20px;
+      font-weight: 700;
     }
 
-    .btn-login:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 15px 40px rgba(37,99,235,.45);
+    .btn-login:active {
+      transform: scale(0.97);
+      box-shadow: 0 4px 12px rgba(37,99,235,.3);
     }
 
     .card-hover {
-      transition: .3s ease;
+      transition: all .25s ease;
     }
 
-    .card-hover:hover {
-      transform: translateY(-4px);
-      border-color: rgba(56,189,248,.35);
+    .card-hover:active {
+      transform: scale(0.96);
     }
 
+    /* Scrollbar personalizada */
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(255,255,255,0.05);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #0ea5e9;
+      border-radius: 10px;
+    }
+
+    /* Mejoras para móvil */
     @media (max-width: 1024px) {
-
       .hero-left {
         display: none;
       }
-
       .mobile-logo {
         display: flex !important;
+      }
+      .glass {
+        backdrop-filter: blur(24px);
+      }
+    }
+
+    @media (max-width: 480px) {
+      .glass {
+        padding: 1.5rem !important;
+        border-radius: 32px !important;
+      }
+      .input-style {
+        padding: 12px 16px;
+        font-size: 15px;
+      }
+      .btn-login {
+        height: 52px;
+        font-size: 15px;
+      }
+    }
+
+    /* Ajustes para pantallas muy pequeñas */
+    @media (max-width: 380px) {
+      .glass {
+        padding: 1.25rem !important;
+      }
+      .input-style {
+        padding: 10px 14px;
+      }
+      .btn-login {
+        height: 48px;
+      }
+    }
+
+    /* Prevenir zoom en inputs en iOS */
+    @media (max-width: 768px) {
+      input, select, textarea {
+        font-size: 16px !important;
       }
     }
   </style>
 </head>
-<body class="bg-gym h-screen overflow-hidden text-white">
-  <div class="h-screen grid lg:grid-cols-2">
-    <!-- HERO -->
-    <div class="hero-left flex flex-col justify-between p-10 xl:p-12 overflow-hidden fade-up">
-
+<body class="bg-gym min-h-screen text-white">
+  <div class="min-h-screen grid lg:grid-cols-2">
+    
+    <!-- HERO IZQUIERDO (oculto en móvil) -->
+    <div class="hero-left flex flex-col justify-between p-8 xl:p-12 overflow-hidden fade-up" style="min-height: 100vh;">
       <!-- TOP -->
       <div>
-
         <div class="flex items-center gap-4">
-
-          <!-- ICON -->
-          <img
-            src="img/icon.png"
-            alt="NeoFit Icon"
-            class="w-16 h-16 object-contain logo-glow"
-          />
-
+          <img src="img/icon.png" alt="NeoFit Icon" class="w-14 h-14 md:w-16 md:h-16 object-contain logo-glow" />
           <div>
-            <h1 class="text-3xl font-black tracking-wide">
-              NeoFit ERP
-            </h1>
-
-            <p class="text-zinc-300 text-sm">
-              Sistema Inteligente para Gimnasios
-            </p>
+            <h1 class="text-2xl md:text-3xl font-black tracking-wide">NeoFit ERP</h1>
+            <p class="text-zinc-300 text-xs md:text-sm">Sistema Inteligente para Gimnasios</p>
           </div>
-
         </div>
-
       </div>
 
       <!-- CENTER -->
-      <div class="max-w-xl">
-
-        <p class="text-sky-400 uppercase tracking-[4px] font-semibold mb-5">
-          Plataforma Fitness Premium
-        </p>
-
-        <h2 class="hero-title text-6xl font-black mb-6">
-          Gestiona tu
-          gimnasio como
-          una marca PRO.
+      <div class="max-w-xl my-8">
+        <p class="text-sky-400 uppercase tracking-[4px] font-semibold text-sm mb-4">Plataforma Fitness Premium</p>
+        <h2 class="hero-title text-4xl md:text-5xl xl:text-6xl font-black mb-5">
+          Gestiona tu gimnasio como una marca PRO.
         </h2>
-
-        <p class="text-zinc-300 text-lg leading-relaxed mb-8">
-          Control de membresías, pagos, usuarios,
-          estadísticas y administración completa
-          en una sola plataforma moderna.
+        <p class="text-zinc-300 text-base md:text-lg leading-relaxed mb-8">
+          Control de membresías, pagos, usuarios, estadísticas y administración completa en una sola plataforma moderna.
         </p>
 
         <!-- FEATURES -->
-        <div class="flex flex-wrap gap-4">
-
-          <div class="glass card-hover rounded-2xl px-5 py-4 flex items-center gap-3">
+        <div class="flex flex-wrap gap-3">
+          <div class="glass card-hover rounded-2xl px-4 py-3 flex items-center gap-2 text-sm">
             <i class="fas fa-chart-line text-sky-400"></i>
             <span>Dashboard Inteligente</span>
           </div>
-
-          <div class="glass card-hover rounded-2xl px-5 py-4 flex items-center gap-3">
+          <div class="glass card-hover rounded-2xl px-4 py-3 flex items-center gap-2 text-sm">
             <i class="fas fa-users text-sky-400"></i>
             <span>Control de Miembros</span>
           </div>
-
-          <div class="glass card-hover rounded-2xl px-5 py-4 flex items-center gap-3">
+          <div class="glass card-hover rounded-2xl px-4 py-3 flex items-center gap-2 text-sm">
             <i class="fas fa-wallet text-sky-400"></i>
             <span>Pagos y Membresías</span>
           </div>
-
         </div>
       </div>
 
       <!-- FOOTER -->
-      <div class="text-zinc-500 text-sm">
+      <div class="text-zinc-500 text-xs md:text-sm">
         © 2026 NeoFit ERP · Premium Gym System
       </div>
     </div>
 
-  <!-- LOGIN -->
-<div class="flex items-center justify-center p-4 md:p-6 fade-up overflow-hidden">
+    <!-- LOGIN DERECHO (mejorado responsive) -->
+    <div class="flex items-center justify-center p-4 md:p-6 fade-up" style="min-height: 100vh;">
+      <div class="glass w-full max-w-[440px] rounded-[32px] p-5 md:p-7 transition-all duration-300">
+        
+        <!-- MOBILE LOGO (visible solo en móvil) -->
+        <div class="mobile-logo hidden items-center justify-center mb-3">
+          <img src="img/icon.png" alt="NeoFit Icon" class="w-12 h-12 object-contain logo-glow" />
+          <span class="ml-2 text-xl font-black bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">NeoFit</span>
+        </div>
 
-  <div class="glass w-full max-w-[430px] rounded-[28px] p-6 md:p-7">
+        <!-- LOGO CENTRAL -->
+        <div class="text-center mb-5">
+          <img src="img/logo.png" alt="NeoFit Logo" 
+               class="w-24 h-24 md:w-28 md:h-28 xl:w-32 xl:h-32 object-contain mx-auto logo-float logo-glow mb-2"
+               onerror="this.style.display='none'; this.nextElementSibling?.style.removeProperty('display')" />
+          <div style="display: none;" class="w-20 h-20 md:w-24 md:h-24 bg-gradient-to-br from-sky-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-2">
+            <i class="fas fa-dumbbell text-white text-3xl"></i>
+          </div>
+          
+          <h2 class="text-2xl md:text-3xl font-black mb-1">Bienvenido</h2>
+          <p class="text-zinc-400 text-xs md:text-sm">Accede a tu plataforma fitness</p>
+        </div>
 
-    <!-- MOBILE LOGO -->
-    <div class="mobile-logo hidden items-center justify-center mb-4">
-      <img
-        src="img/icon.png"
-        alt="NeoFit Icon"
-        class="w-14 h-14 object-contain logo-glow"
-      />
-    </div>
+        <!-- FORMULARIO -->
+        <form id="smartLoginForm" class="space-y-4">
+          <!-- EMAIL / USUARIO -->
+          <div>
+            <label class="block text-zinc-400 text-xs md:text-sm mb-2 font-medium">
+              <i class="fas fa-envelope mr-1 text-sky-400"></i> Email o usuario
+            </label>
+            <input type="text" id="loginIdentifier" placeholder="admin@neofit.com" 
+                   class="input-style w-full" autocomplete="username" />
+          </div>
 
-    <!-- LOGO -->
-    <div class="text-center mb-6">
+          <!-- CONTRASEÑA -->
+          <div>
+            <label class="block text-zinc-400 text-xs md:text-sm mb-2 font-medium">
+              <i class="fas fa-lock mr-1 text-sky-400"></i> Contraseña
+            </label>
+            <div class="relative">
+              <input type="password" id="loginPassword" placeholder="••••••••" 
+                     class="input-style w-full pr-14" autocomplete="current-password" />
+              <button type="button" id="togglePassword" 
+                      class="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-sky-400 transition-all active:scale-90">
+                <i class="fas fa-eye-slash text-base md:text-lg"></i>
+              </button>
+            </div>
+          </div>
 
-      <img
-        src="img/logo.png"
-        alt="NeoFit Logo"
-        class="w-32 h-32 xl:w-36 xl:h-36 object-contain mx-auto logo-float logo-glow animate-pulse mb-3"
-      />
+          <!-- OPCIÓN RECORDAR (opcional) -->
+          <div class="flex justify-between items-center text-xs md:text-sm">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="rememberMe" class="w-3.5 h-3.5 rounded border-zinc-600 bg-zinc-800 accent-sky-500" />
+              <span class="text-zinc-400">Recordarme</span>
+            </label>
+            <a href="#" class="text-sky-400 hover:text-sky-300 transition-colors">¿Olvidaste tu contraseña?</a>
+          </div>
 
-      <h2 class="text-3xl font-black mb-1">
-        Bienvenido
-      </h2>
-
-      <p class="text-zinc-400 text-sm">
-        Accede a tu plataforma fitness
-      </p>
-
-    </div>
-
-    <!-- FORM -->
-    <form id="smartLoginForm" class="space-y-4">
-
-      <!-- USER -->
-      <div>
-
-        <label class="block text-zinc-400 text-sm mb-2">
-          Email o usuario
-        </label>
-
-        <input
-          type="text"
-          id="loginIdentifier"
-          placeholder="admin@neofit.com"
-          class="input-style h-[56px]"
-        />
-
-      </div>
-
-      <!-- PASSWORD -->
-      <div>
-
-        <label class="block text-zinc-400 text-sm mb-2">
-          Contraseña
-        </label>
-
-        <div class="relative">
-
-          <input
-            type="password"
-            id="loginPassword"
-            placeholder="••••••••"
-            class="input-style h-[56px] pr-14"
-          />
-
-          <button
-            type="button"
-            id="togglePassword"
-            class="absolute right-5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition"
-          >
-            <i class="fas fa-eye-slash text-lg"></i>
+          <!-- BOTÓN LOGIN -->
+          <button type="submit" class="btn-login w-full h-[52px] md:h-[56px] rounded-xl md:rounded-2xl font-bold text-sm md:text-base">
+            <i class="fas fa-arrow-right-to-bracket mr-2"></i>
+            Ingresar al sistema
           </button>
+        </form>
 
+        <!-- BOTTOM INFO -->
+        <div class="mt-6 flex items-center justify-center gap-4 text-zinc-500 text-xs">
+          <div class="flex items-center gap-1.5">
+            <i class="fas fa-shield-halved text-sky-400 text-xs"></i>
+            <span>Seguro</span>
+          </div>
+          <div class="w-1 h-1 rounded-full bg-zinc-600"></div>
+          <div class="flex items-center gap-1.5">
+            <i class="fas fa-bolt text-sky-400 text-xs"></i>
+            <span>Rápido</span>
+          </div>
+          <div class="w-1 h-1 rounded-full bg-zinc-600"></div>
+          <div class="flex items-center gap-1.5">
+            <i class="fas fa-mobile-screen text-sky-400 text-xs"></i>
+            <span>Responsive</span>
+          </div>
         </div>
 
       </div>
-
-      <!-- BUTTON -->
-      <button
-        type="submit"
-        class="btn-login w-full h-[58px] rounded-2xl font-bold text-base"
-      >
-        <i class="fas fa-arrow-right-to-bracket mr-2"></i>
-        Ingresar al sistema
-      </button>
-
-    </form>
-
-    <!-- BOTTOM -->
-    <div class="mt-5 flex items-center justify-center gap-5 text-zinc-500 text-xs">
-
-      <div class="flex items-center gap-2">
-        <i class="fas fa-shield-halved text-sky-400"></i>
-        <span>Seguro</span>
-      </div>
-
-      <div class="flex items-center gap-2">
-        <i class="fas fa-bolt text-sky-400"></i>
-        <span>Rápido</span>
-      </div>
-
-      <div class="flex items-center gap-2">
-        <i class="fas fa-mobile-screen text-sky-400"></i>
-        <span>Responsive</span>
-      </div>
-
     </div>
-
   </div>
 
-</div>
-
+  <!-- TOAST NOTIFICACION (mejorada) -->
+  <div id="loginToast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-zinc-900/95 backdrop-blur-xl px-5 py-3 rounded-2xl shadow-2xl border border-white/10 z-50 hidden transition-all duration-300" style="max-width: 90vw;">
+    <div class="flex items-center gap-2 text-sm">
+      <i id="toastIcon" class="fas fa-info-circle text-sky-400"></i>
+      <span id="toastMessage" class="text-white font-medium">Mensaje</span>
+    </div>
   </div>
 
-  <!-- SCRIPT PASSWORD -->
   <script>
+    // Toggle password visibility
+    const togglePassword = document.getElementById('togglePassword');
+    const passwordInput = document.getElementById('loginPassword');
 
-    const togglePassword =
-      document.getElementById('togglePassword');
+    if (togglePassword && passwordInput) {
+      togglePassword.addEventListener('click', () => {
+        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordInput.setAttribute('type', type);
+        const icon = togglePassword.querySelector('i');
+        icon.classList.toggle('fa-eye-slash');
+        icon.classList.toggle('fa-eye');
+      });
+    }
 
-    const passwordInput =
-      document.getElementById('loginPassword');
+    // Función de toast mejorada
+    function showLoginToast(message, type = 'info') {
+      const toast = document.getElementById('loginToast');
+      const toastIcon = document.getElementById('toastIcon');
+      const toastMessage = document.getElementById('toastMessage');
+      
+      if (!toast) return;
+      
+      const icons = {
+        success: 'fa-circle-check',
+        error: 'fa-circle-exclamation',
+        warning: 'fa-triangle-exclamation',
+        info: 'fa-circle-info'
+      };
+      
+      const colors = {
+        success: 'text-emerald-400',
+        error: 'text-red-400',
+        warning: 'text-yellow-400',
+        info: 'text-sky-400'
+      };
+      
+      toastIcon.className = `fas ${icons[type] || icons.info} ${colors[type] || colors.info}`;
+      toastMessage.textContent = message;
+      
+      toast.classList.remove('hidden');
+      toast.style.opacity = '1';
+      
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.classList.add('hidden'), 300);
+      }, 3000);
+    }
 
-    togglePassword.addEventListener('click', () => {
+    // Recordar usuario (localStorage)
+    const rememberCheckbox = document.getElementById('rememberMe');
+    const identifierInput = document.getElementById('loginIdentifier');
+    
+    // Cargar email guardado
+    if (localStorage.getItem('neofit_remembered_email') && identifierInput) {
+      identifierInput.value = localStorage.getItem('neofit_remembered_email');
+      if (rememberCheckbox) rememberCheckbox.checked = true;
+    }
 
-      const type =
-        passwordInput.getAttribute('type') === 'password'
-        ? 'text'
-        : 'password';
-
-      passwordInput.setAttribute('type', type);
-
-      togglePassword.innerHTML =
-        type === 'password'
-        ? '<i class=\"fas fa-eye-slash text-lg\"></i>'
-        : '<i class=\"fas fa-eye text-lg\"></i>';
-
-    });
-
+    // Login handler
+    const loginForm = document.getElementById('smartLoginForm');
+    if (loginForm) {
+      loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const identifier = document.getElementById('loginIdentifier')?.value || '';
+        const password = document.getElementById('loginPassword')?.value || '';
+        const remember = rememberCheckbox?.checked || false;
+        
+        if (!identifier || !password) {
+          showLoginToast('Por favor ingresa email y contraseña', 'warning');
+          return;
+        }
+        
+        // Guardar email si "recordarme" está activado
+        if (remember) {
+          localStorage.setItem('neofit_remembered_email', identifier);
+        } else {
+          localStorage.removeItem('neofit_remembered_email');
+        }
+        
+        // Mostrar loading en el botón
+        const submitBtn = loginForm.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<div class="loading-spinner inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div> Validando...';
+        submitBtn.disabled = true;
+        
+        try {
+          // Verificar si es admin o miembro
+          const isAdmin = identifier === 'admin@neofit.com' && password === 'demo123';
+          
+          if (isAdmin) {
+            // Login admin manual
+            localStorage.setItem('userRole', 'admin');
+            localStorage.setItem('user', JSON.stringify({ email: identifier, role: 'admin' }));
+            showLoginToast('✅ Acceso concedido como administrador', 'success');
+            setTimeout(() => {
+              window.location.href = 'index.html';
+            }, 800);
+          } else {
+            // Intentar login con Supabase
+            const client = window.supabaseClient?.();
+            if (!client) {
+              throw new Error('Supabase no disponible');
+            }
+            
+            const { data, error } = await client.auth.signInWithPassword({
+              email: identifier,
+              password: password
+            });
+            
+            if (error) throw error;
+            
+            if (data?.user) {
+              // Verificar si es miembro (tiene rol member)
+              const userRole = data.user.user_metadata?.role || 'member';
+              
+              if (userRole === 'member') {
+                // Es miembro - redirigir a dashboard de cliente
+                const { data: memberData } = await client
+                  .from('members')
+                  .select('*')
+                  .eq('email', identifier)
+                  .single();
+                
+                if (memberData) {
+                  localStorage.setItem('userRole', 'member');
+                  localStorage.setItem('neofit_client', JSON.stringify(memberData));
+                  showLoginToast('✅ Bienvenido a NeoFit', 'success');
+                  setTimeout(() => {
+                    window.location.href = 'client-dashboard.html';
+                  }, 800);
+                } else {
+                  throw new Error('Perfil de miembro no encontrado');
+                }
+              } else {
+                // Es admin
+                localStorage.setItem('userRole', 'admin');
+                localStorage.setItem('user', JSON.stringify(data.user));
+                showLoginToast('✅ Acceso concedido', 'success');
+                setTimeout(() => {
+                  window.location.href = 'index.html';
+                }, 800);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Login error:', error);
+          showLoginToast('❌ Credenciales incorrectas', 'error');
+          submitBtn.innerHTML = originalText;
+          submitBtn.disabled = false;
+        }
+      });
+    }
   </script>
 
-  <!-- SUPABASE -->
+  <!-- Supabase Config -->
   <script src="supabase-config.js"></script>
-  <script src="smart-login.js"></script>
+  
+  <!-- Pequeño estilo para el spinner si no existe -->
+  <style>
+    .loading-spinner {
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
 
 </body>
 </html>
