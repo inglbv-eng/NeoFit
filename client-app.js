@@ -341,31 +341,57 @@ async function loadClientRoutine() {
 }
 
 async function quickClientCheckin() {
-  if (!currentClient) return;
-  
+  const button = document.querySelector('button[onclick="quickClientCheckin()"]');
+  if (!currentClient) {
+    showClientToast('Error: No se encontró información del cliente', 'error');
+    return;
+  }
+
+  // Efecto de carga en el botón
+  const originalHTML = button.innerHTML;
+  button.disabled = true;
+  button.innerHTML = `<i class="fas fa-spinner fa-spin text-xl"></i> Registrando...`;
+
   try {
-    const client = window.supabaseClient();
-    if (!client) throw new Error('Supabase no disponible');
-    
-    const expiryDate = new Date(currentClient.membership_end);
-    if (expiryDate < new Date()) {
-      showClientToast('⚠️ Membresía vencida, contacta al administrador', 'error');
+    const supabase = window.supabaseClient();
+    if (!supabase) throw new Error('Supabase no disponible');
+
+    // Verificar membresía activa
+    if (new Date(currentClient.membership_end) < new Date()) {
+      showClientToast('⚠️ Tu membresía está vencida', 'error');
       return;
     }
-    
-    const now = new Date();
-    const localDateTimeString = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-    
-    const { error } = await client.from('checkins').insert([{ member_id: currentClient.id, checkin_time: localDateTimeString }]);
+
+    // ✅ Insertar sin enviar checkin_time (usa el DEFAULT de la tabla)
+    const { error } = await supabase
+      .from('checkins')
+      .insert([{
+        member_id: currentClient.id
+        // checkin_time se llena automáticamente con hora de México
+      }]);
+
     if (error) throw error;
-    
-    await client.from('members').update({ last_checkin: localDateTimeString }).eq('id', currentClient.id);
-    showClientToast('✅ Check-in registrado! Buen entrenamiento 💪');
+
+    // Actualizar último check-in del miembro
+    const now = new Date();
+    const localTime = now.toISOString().slice(0, 19).replace('T', ' ');
+
+    await supabase
+      .from('members')
+      .update({ last_checkin: localTime })
+      .eq('id', currentClient.id);
+
+    showClientToast('✅ ¡Asistencia registrada correctamente! 💪', 'success');
+
+    // Actualizar la lista de check-ins inmediatamente
     await loadClientCheckins();
-    
+
   } catch (error) {
-    console.error('Error:', error);
-    showClientToast('Error al registrar check-in', 'error');
+    console.error('Error al registrar check-in:', error);
+    showClientToast('❌ Error al registrar asistencia. Inténtalo de nuevo.', 'error');
+  } finally {
+    button.disabled = false;
+    button.innerHTML = originalHTML;
   }
 }
 
