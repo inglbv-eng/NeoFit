@@ -25,115 +25,195 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
   
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Inter', system-ui, sans-serif; background: #09090b; }
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
     
+    body {
+        font-family: 'Inter', system-ui, sans-serif;
+        background: #09090b;
+    }
+    
+    /* ========== NAVEGACIÓN ========== */
     .nav-active {
-      background: linear-gradient(135deg, #0284c7, #0369a1);
-      color: white;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        background: linear-gradient(135deg, #0284c7, #0369a1);
+        color: white;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
     
-    .card-hover { transition: all 0.3s ease; }
-    .card-hover:hover { transform: translateY(-2px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2); }
+    /* ========== TARJETAS ========== */
+    .card-hover {
+        transition: all 0.3s ease;
+    }
     
-    .animate-fade-in { animation: fadeIn 0.5s ease-in; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .card-hover:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+    }
     
-    .qr-scanner { position: relative; overflow: hidden; }
+    .member-card {
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+    
+    .member-card:hover {
+        transform: translateY(-2px);
+        border-color: #0284c7;
+    }
+    
+    /* ========== ANIMACIONES ========== */
+    .animate-fade-in {
+        animation: fadeIn 0.5s ease-in;
+    }
+    
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    /* ========== QR SCANNER ========== */
+    .qr-scanner {
+        position: relative;
+        overflow: hidden;
+    }
+    
     .qr-scanner::after {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      border: 2px solid #0284c7;
-      border-radius: 1rem;
-      pointer-events: none;
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        border: 2px solid #0284c7;
+        border-radius: 1rem;
+        pointer-events: none;
     }
     
-    .sidebar-logo { width: 48px; height: 48px; object-fit: contain; border-radius: 12px; }
-    .login-logo { width: 70px; height: 70px; object-fit: contain; margin: 0 auto; border-radius: 20px; }
-    
-    /* Tab styles */
-    .tab-btn { transition: all 0.2s ease; cursor: pointer; }
-    .tab-btn.active { border-bottom-color: #0284c7; color: #38bdf8; }
-    
-    /* Scrollbar */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #1f1f24; border-radius: 10px; }
-    ::-webkit-scrollbar-thumb { background: #0284c7; border-radius: 10px; }
-    
-    /* Loading spinner */
-    .loading-spinner {
-      width: 20px;
-      height: 20px;
-      border: 2px solid rgba(255,255,255,0.3);
-      border-top-color: white;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      display: inline-block;
+    /* ========== LOGOS ========== */
+    .sidebar-logo {
+        width: 48px;
+        height: 48px;
+        object-fit: contain;
+        border-radius: 12px;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Estilos para botones móviles activos */
+    
+    .login-logo {
+        width: 70px;
+        height: 70px;
+        object-fit: contain;
+        margin: 0 auto;
+        border-radius: 20px;
+    }
+    
+    /* ========== TABS PC ========== */
+    .tab-btn {
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+    
+    .tab-btn.active {
+        border-bottom-color: #0284c7;
+        color: #38bdf8;
+    }
+    
+    /* ========== TABS MÓVIL ========== */
     .tab-mobile-btn.active {
-      background: linear-gradient(135deg, rgba(14,165,233,0.2), rgba(6,182,212,0.15));
-      border: 1px solid rgba(14,165,233,0.5);
-      transform: scale(0.98);
+        background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(6, 182, 212, 0.15));
+        border: 1px solid rgba(14, 165, 233, 0.5);
+        transform: scale(0.98);
     }
     
     .tab-mobile-btn.active .w-12 {
-      background: linear-gradient(135deg, #0ea5e9, #06b6d4);
-      box-shadow: 0 4px 12px rgba(14,165,233,0.3);
+        background: linear-gradient(135deg, #0ea5e9, #06b6d4);
+        box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
     }
     
     .tab-mobile-btn.active .w-12 i {
-      color: white !important;
+        color: white !important;
     }
     
     .tab-mobile-btn.active span {
-      color: #38bdf8 !important;
-      font-weight: 600;
+        color: #38bdf8 !important;
+        font-weight: 600;
     }
     
-    /* Ocultar scrollbar en pestañas PC */
-    .scrollbar-hide {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-    }
-    .scrollbar-hide::-webkit-scrollbar {
-      display: none;
-    }
-    
-    /* Efecto hover en móvil (sin mantener estado) */
+    /* Efecto táctil en móvil */
     @media (max-width: 768px) {
-      .tab-mobile-btn:active {
-        transform: scale(0.96);
-      }
+        .tab-mobile-btn:active {
+            transform: scale(0.96);
+        }
     }
     
-    /* Member card hover */
-    .member-card { transition: all 0.2s ease; cursor: pointer; }
-    .member-card:hover { transform: translateY(-2px); border-color: #0284c7; }
+    /* ========== SCROLLBAR ========== */
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: #1f1f24;
+        border-radius: 10px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: #0284c7;
+        border-radius: 10px;
+    }
+    
+    /* Scrollbar oculta para pestañas PC */
+    .scrollbar-hide {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+    
+    .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+    }
     
     /* Custom scroll para modales */
     .custom-scroll::-webkit-scrollbar {
-      width: 6px;
+        width: 6px;
     }
+    
     .custom-scroll::-webkit-scrollbar-track {
-      background: rgba(255, 255, 255, 0.05);
-      border-radius: 10px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
     }
+    
     .custom-scroll::-webkit-scrollbar-thumb {
-      background: #0284c7;
-      border-radius: 10px;
+        background: #0284c7;
+        border-radius: 10px;
     }
+    
     .custom-scroll::-webkit-scrollbar-thumb:hover {
-      background: #0ea5e9;
+        background: #0ea5e9;
     }
-  </style>
+    
+    /* ========== LOADING SPINNER ========== */
+    .loading-spinner {
+        width: 20px;
+        height: 20px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        display: inline-block;
+    }
+    
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+</style>
 </head>
 <body class="bg-gradient-to-br from-zinc-950 to-zinc-900 text-white">
 
@@ -420,10 +500,7 @@
     </div>
   </div>
 
-  
-  
   <!-- ==================== MODALES ==================== -->
-  
   <!-- MODAL DE MIEMBROS -->
   <div id="memberModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
     <div class="bg-zinc-900 rounded-2xl sm:rounded-3xl w-full max-w-[95%] sm:max-w-2xl lg:max-w-3xl max-h-[90vh] overflow-hidden border border-zinc-800 shadow-2xl flex flex-col">
@@ -594,73 +671,74 @@
         </div>
       </div>
 
-            <!-- VERSIÓN MÓVIL: 2 BLOQUES DE 3 BOTONES -->
-      <div class="block md:hidden border-b border-zinc-800">
-        <!-- PRIMER BLOQUE: Info + Pagos + Progreso -->
-        <div class="grid grid-cols-3 gap-2 p-3">
-          <button onclick="showProfileTab('info')" id="tabInfoMobile" 
-                  class="tab-mobile-btn group flex flex-col items-center gap-2 p-3 rounded-xl bg-sky-500/10 border border-sky-500/30 transition-all active:scale-95">
-            <div class="w-12 h-12 rounded-full bg-sky-500/20 flex items-center justify-center group-active:scale-110 transition">
-              <i class="fas fa-user text-sky-400 text-xl"></i>
-            </div>
-            <span class="text-xs font-semibold text-sky-400">📋 Info</span>
-          </button>
-          
-          <button onclick="showProfileTab('payments')" id="tabPaymentsMobile"
-                  class="tab-mobile-btn group flex flex-col items-center gap-2 p-3 rounded-xl bg-zinc-800/50 hover:bg-green-500/10 transition-all active:scale-95">
-            <div class="w-12 h-12 rounded-full bg-zinc-700/50 flex items-center justify-center group-active:scale-110 transition">
-              <i class="fas fa-credit-card text-zinc-400 group-hover:text-green-400 text-xl"></i>
-            </div>
-            <span class="text-xs font-medium text-zinc-400 group-hover:text-green-400">💰 Pagos</span>
-          </button>
-          
-          <button onclick="showProfileTab('progress')" id="tabProgressMobile"
-                  class="tab-mobile-btn group flex flex-col items-center gap-2 p-3 rounded-xl bg-zinc-800/50 hover:bg-blue-500/10 transition-all active:scale-95">
-            <div class="w-12 h-12 rounded-full bg-zinc-700/50 flex items-center justify-center group-active:scale-110 transition">
-              <i class="fas fa-chart-line text-zinc-400 group-hover:text-blue-400 text-xl"></i>
-            </div>
-            <span class="text-xs font-medium text-zinc-400 group-hover:text-blue-400">📊 Progreso</span>
-          </button>
-        </div>
-        
-        <!-- SEGUNDO BLOQUE: Rutinas + Check-ins + Acceso -->
-        <div class="grid grid-cols-3 gap-2 p-3 pt-0">
-          <button onclick="showProfileTab('routines')" id="tabRoutinesMobile"
-                  class="tab-mobile-btn group flex flex-col items-center gap-2 p-3 rounded-xl bg-zinc-800/50 hover:bg-purple-500/10 transition-all active:scale-95">
-            <div class="w-12 h-12 rounded-full bg-zinc-700/50 flex items-center justify-center group-active:scale-110 transition">
-              <i class="fas fa-dumbbell text-zinc-400 group-hover:text-purple-400 text-xl"></i>
-            </div>
-            <span class="text-xs font-medium text-zinc-400 group-hover:text-purple-400">💪 Rutinas</span>
-          </button>
-          
-          <button onclick="showProfileTab('checkins')" id="tabCheckinsMobile"
-                  class="tab-mobile-btn group flex flex-col items-center gap-2 p-3 rounded-xl bg-zinc-800/50 hover:bg-emerald-500/10 transition-all active:scale-95">
-            <div class="w-12 h-12 rounded-full bg-zinc-700/50 flex items-center justify-center group-active:scale-110 transition">
-              <i class="fas fa-calendar-check text-zinc-400 group-hover:text-emerald-400 text-xl"></i>
-            </div>
-            <span class="text-xs font-medium text-zinc-400 group-hover:text-emerald-400">📅 Check-ins</span>
-          </button>
-          
-          <button onclick="showProfileTab('user')" id="tabUserMobile"
-                  class="tab-mobile-btn group flex flex-col items-center gap-2 p-3 rounded-xl bg-zinc-800/50 hover:bg-orange-500/10 transition-all active:scale-95">
-            <div class="w-12 h-12 rounded-full bg-zinc-700/50 flex items-center justify-center group-active:scale-110 transition">
-              <i class="fas fa-key text-zinc-400 group-hover:text-orange-400 text-xl"></i>
-            </div>
-            <span class="text-xs font-medium text-zinc-400 group-hover:text-orange-400">🔐 Acceso</span>
-          </button>
-        </div>
+        <!-- VERSIÓN MÓVIL: 2 BLOQUES DE 3 BOTONES (solo visible en móvil) -->
+<div class="md:hidden border-b border-zinc-800">
+  <!-- PRIMER BLOQUE: Info + Pagos + Progreso -->
+  <div class="grid grid-cols-3 gap-2 p-3">
+    <button onclick="showProfileTab('info')" id="tabInfoMobile" 
+            class="tab-mobile-btn group flex flex-col items-center gap-2 p-3 rounded-xl bg-sky-500/10 border border-sky-500/30 transition-all active:scale-95">
+      <div class="w-12 h-12 rounded-full bg-sky-500/20 flex items-center justify-center group-active:scale-110 transition">
+        <i class="fas fa-user text-sky-400 text-xl"></i>
       </div>
+      <span class="text-xs font-semibold text-sky-400">📋 Info</span>
+    </button>
+    
+    <button onclick="showProfileTab('payments')" id="tabPaymentsMobile"
+            class="tab-mobile-btn group flex flex-col items-center gap-2 p-3 rounded-xl bg-zinc-800/50 hover:bg-green-500/10 transition-all active:scale-95">
+      <div class="w-12 h-12 rounded-full bg-zinc-700/50 flex items-center justify-center group-active:scale-110 transition">
+        <i class="fas fa-credit-card text-zinc-400 group-hover:text-green-400 text-xl"></i>
+      </div>
+      <span class="text-xs font-medium text-zinc-400 group-hover:text-green-400">💰 Pagos</span>
+    </button>
+    
+    <button onclick="showProfileTab('progress')" id="tabProgressMobile"
+            class="tab-mobile-btn group flex flex-col items-center gap-2 p-3 rounded-xl bg-zinc-800/50 hover:bg-blue-500/10 transition-all active:scale-95">
+      <div class="w-12 h-12 rounded-full bg-zinc-700/50 flex items-center justify-center group-active:scale-110 transition">
+        <i class="fas fa-chart-line text-zinc-400 group-hover:text-blue-400 text-xl"></i>
+      </div>
+      <span class="text-xs font-medium text-zinc-400 group-hover:text-blue-400">📊 Progreso</span>
+    </button>
+  </div>
   
-      <div class="border-b border-zinc-800">
-        <div class="flex overflow-x-auto">
-          <button onclick="showProfileTab('info')" id="tabInfo" class="tab-btn active px-6 py-3 font-medium text-sm border-b-2 border-sky-500 text-sky-400">📋 Info</button>
-          <button onclick="showProfileTab('payments')" id="tabPayments" class="tab-btn px-6 py-3 font-medium text-sm text-zinc-400">💰 Pagos</button>
-          <button onclick="showProfileTab('progress')" id="tabProgress" class="tab-btn px-6 py-3 font-medium text-sm text-zinc-400">📊 Progreso</button>
-          <button onclick="showProfileTab('routines')" id="tabRoutines" class="tab-btn px-6 py-3 font-medium text-sm text-zinc-400">💪 Rutinas</button>
-          <button onclick="showProfileTab('checkins')" id="tabCheckins" class="tab-btn px-6 py-3 font-medium text-sm text-zinc-400">📅 Check-ins</button>
-          <button onclick="showProfileTab('user')" id="tabUser" class="tab-btn px-6 py-3 font-medium text-sm text-zinc-400">🔐 Acceso</button>
-        </div>
+  <!-- SEGUNDO BLOQUE: Rutinas + Check-ins + Acceso -->
+  <div class="grid grid-cols-3 gap-2 p-3 pt-0">
+    <button onclick="showProfileTab('routines')" id="tabRoutinesMobile"
+            class="tab-mobile-btn group flex flex-col items-center gap-2 p-3 rounded-xl bg-zinc-800/50 hover:bg-purple-500/10 transition-all active:scale-95">
+      <div class="w-12 h-12 rounded-full bg-zinc-700/50 flex items-center justify-center group-active:scale-110 transition">
+        <i class="fas fa-dumbbell text-zinc-400 group-hover:text-purple-400 text-xl"></i>
       </div>
+      <span class="text-xs font-medium text-zinc-400 group-hover:text-purple-400">💪 Rutinas</span>
+    </button>
+    
+    <button onclick="showProfileTab('checkins')" id="tabCheckinsMobile"
+            class="tab-mobile-btn group flex flex-col items-center gap-2 p-3 rounded-xl bg-zinc-800/50 hover:bg-emerald-500/10 transition-all active:scale-95">
+      <div class="w-12 h-12 rounded-full bg-zinc-700/50 flex items-center justify-center group-active:scale-110 transition">
+        <i class="fas fa-calendar-check text-zinc-400 group-hover:text-emerald-400 text-xl"></i>
+      </div>
+      <span class="text-xs font-medium text-zinc-400 group-hover:text-emerald-400">📅 Check-ins</span>
+    </button>
+    
+    <button onclick="showProfileTab('user')" id="tabUserMobile"
+            class="tab-mobile-btn group flex flex-col items-center gap-2 p-3 rounded-xl bg-zinc-800/50 hover:bg-orange-500/10 transition-all active:scale-95">
+      <div class="w-12 h-12 rounded-full bg-zinc-700/50 flex items-center justify-center group-active:scale-110 transition">
+        <i class="fas fa-key text-zinc-400 group-hover:text-orange-400 text-xl"></i>
+      </div>
+      <span class="text-xs font-medium text-zinc-400 group-hover:text-orange-400">🔐 Acceso</span>
+    </button>
+  </div>
+</div>
+
+<!-- VERSIÓN PC: barra horizontal (solo visible en PC) -->
+<div class="hidden md:flex border-b border-zinc-800">
+  <div class="flex overflow-x-auto">
+    <button onclick="showProfileTab('info')" id="tabInfo" class="tab-btn active px-6 py-3 font-medium text-sm border-b-2 border-sky-500 text-sky-400">📋 Info</button>
+    <button onclick="showProfileTab('payments')" id="tabPayments" class="tab-btn px-6 py-3 font-medium text-sm text-zinc-400">💰 Pagos</button>
+    <button onclick="showProfileTab('progress')" id="tabProgress" class="tab-btn px-6 py-3 font-medium text-sm text-zinc-400">📊 Progreso</button>
+    <button onclick="showProfileTab('routines')" id="tabRoutines" class="tab-btn px-6 py-3 font-medium text-sm text-zinc-400">💪 Rutinas</button>
+    <button onclick="showProfileTab('checkins')" id="tabCheckins" class="tab-btn px-6 py-3 font-medium text-sm text-zinc-400">📅 Check-ins</button>
+    <button onclick="showProfileTab('user')" id="tabUser" class="tab-btn px-6 py-3 font-medium text-sm text-zinc-400">🔐 Acceso</button>
+  </div>
+</div>
       
       <div class="p-6">
         <div id="infoTab" class="profile-tab">
