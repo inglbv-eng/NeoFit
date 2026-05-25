@@ -1282,43 +1282,14 @@ async function updateUserAuthUI() {
   const client = window.supabaseClient();
   if (!client) return;
   
-  // Verificar si existe en la tabla profiles
-  let hasProfile = false;
-  let profileData = null;
+  // Buscar por email en profiles
+  const { data: profile, error: profileError } = await client
+    .from('profiles')
+    .select('id, email, full_name, role')
+    .eq('email', currentProfileMember.email)
+    .maybeSingle();
   
-  if (currentProfileMember.auth_id) {
-    const { data: profile, error: profileError } = await client
-      .from('profiles')
-      .select('id, email, full_name, role')
-      .eq('id', currentProfileMember.auth_id)
-      .maybeSingle();
-    
-    hasProfile = !!profile;
-    profileData = profile;
-    
-    if (profileError) {
-      console.warn('Error verificando perfil:', profileError);
-    }
-  }
-  
-  // Si no tiene auth_id pero tiene email, verificar si existe en profiles por email
-  if (!hasProfile && currentProfileMember.email) {
-    const { data: profileByEmail } = await client
-      .from('profiles')
-      .select('id')
-      .eq('email', currentProfileMember.email)
-      .maybeSingle();
-    
-    if (profileByEmail) {
-      hasProfile = true;
-      // Actualizar member con el auth_id encontrado
-      await client
-        .from('members')
-        .update({ auth_id: profileByEmail.id })
-        .eq('id', currentProfileMember.id);
-      currentProfileMember.auth_id = profileByEmail.id;
-    }
-  }
+  const hasProfile = !!profile;
   
   const notCreatedDiv = document.getElementById('userNotCreated');
   const createdDiv = document.getElementById('userCreated');
@@ -1367,14 +1338,12 @@ async function updateMemberEmail() {
     return;
   }
   
-  // Validar formato de email
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(newEmail)) {
     showToast('Ingresa un email válido', 'error');
     return;
   }
   
-  // Confirmar cambio
   if (!confirm(`¿Cambiar email de ${currentProfileMember.name} de "${currentProfileMember.email}" a "${newEmail}"?`)) {
     return;
   }
@@ -1383,7 +1352,7 @@ async function updateMemberEmail() {
     const client = window.supabaseClient();
     if (!client) throw new Error('Supabase no disponible');
     
-    // Actualizar email en tabla members
+    // 1. Actualizar email en members
     const { error: updateError } = await client
       .from('members')
       .update({ email: newEmail })
@@ -1391,23 +1360,30 @@ async function updateMemberEmail() {
     
     if (updateError) throw updateError;
     
-    // Actualizar en el objeto actual
+    // 2. Buscar y actualizar en profiles
+    const { data: profile } = await client
+      .from('profiles')
+      .select('id')
+      .eq('email', currentProfileMember.email)
+      .maybeSingle();
+    
+    if (profile) {
+      await client
+        .from('profiles')
+        .update({ email: newEmail })
+        .eq('id', profile.id);
+    }
+    
+    // 3. Actualizar en el objeto actual
     currentProfileMember.email = newEmail;
     
-    // Actualizar en allMembers
+    // 4. Actualizar en allMembers
     const memberIndex = allMembers.findIndex(m => m.id === currentProfileMember.id);
     if (memberIndex !== -1) {
       allMembers[memberIndex].email = newEmail;
     }
     
     showToast('✅ Email actualizado correctamente', 'success');
-    
-    // Si tiene cuenta de auth, también actualizar allí
-    if (currentProfileMember.auth_id) {
-      // Nota: Para actualizar email en Auth, se necesita privilegios de admin
-      showToast('⚠️ Recuerda actualizar también el email en la cuenta de acceso', 'warning');
-    }
-    
     await updateUserAuthUI();
     
   } catch (error) {
@@ -1423,40 +1399,30 @@ async function createUserAuthForMember() {
     return; 
   }
   
-  if (currentProfileMember.auth_id) {
-    showToast('⚠️ Este miembro ya tiene una cuenta de acceso', 'warning');
-    await updateUserAuthUI();
-    return;
-  }
-  
   const email = currentProfileMember.email;
   const name = currentProfileMember.name;
   const phone = currentProfileMember.phone;
   
-  showToast(`Verificando disponibilidad del email...`, 'info');
+  const client = window.supabaseClient();
+  if (!client) throw new Error('Supabase no disponible');
+  
+  // Verificar si ya existe un profile con este email
+  const { data: existingProfile } = await client
+    .from('profiles')
+    .select('id')
+    .eq('email', email)
+    .maybeSingle();
+  
+  if (existingProfile) {
+    showToast('⚠️ Este email ya tiene una cuenta de acceso', 'warning');
+    await updateUserAuthUI();
+    return;
+  }
+  
+  showToast(`Creando cuenta para: ${email}...`, 'info');
   
   try {
-    const client = window.supabaseClient();
-    if (!client) throw new Error('Supabase no disponible');
-    
-    // Verificar si el email ya existe en Auth
-    const { data: existingUser, error: checkError } = await client.auth
-      .signInWithPassword({ email: email, password: 'temp_check_123' })
-      .catch(() => ({ data: null, error: { message: 'not_found' } }));
-    
-    // Si el error NO es "Invalid login credentials", el usuario podría existir
-    if (checkError && !checkError.message?.includes('Invalid login credentials')) {
-      // Podría ser que el usuario ya existe
-      showToast(`❌ El email "${email}" ya está registrado en el sistema.\n\nNo se puede crear una cuenta duplicada.`, 'error');
-      showToast('💡 Solución: Edita el miembro y cambia su email a uno diferente', 'warning');
-      return;
-    }
-    
-    // Generar contraseña temporal
     const tempPassword = generateTemporaryPassword();
-    console.log('🔑 Contraseña temporal:', tempPassword);
-    
-    showToast('Creando cuenta de acceso...', 'info');
     
     // Crear usuario en Auth
     const { data, error } = await client.auth.signUp({
@@ -1472,12 +1438,10 @@ async function createUserAuthForMember() {
     });
     
     if (error) {
-      console.error('❌ Error en signUp:', error);
-      
       if (error.status === 429) {
-        showToast('⏳ Demasiados intentos. Espera 5-10 minutos y vuelve a intentar.', 'error');
+        showToast('⏳ Demasiados intentos. Espera 5-10 minutos.', 'error');
       } else if (error.message?.includes('already registered')) {
-        showToast('❌ Email ya registrado. Cambia el email del miembro.', 'error');
+        showToast('❌ Email ya registrado. Usa otro email.', 'error');
       } else {
         showToast('Error: ' + error.message, 'error');
       }
@@ -1485,14 +1449,11 @@ async function createUserAuthForMember() {
     }
     
     if (data?.user?.id) {
-      const authId = data.user.id;
-      console.log('✅ Usuario creado en Auth:', authId);
-      
-      // Guardar en tabla profiles
+      // Guardar en profiles
       const { error: profileError } = await client
         .from('profiles')
         .insert({ 
-          id: authId,
+          id: data.user.id,
           email: email,
           full_name: name,
           role: 'member',
@@ -1500,48 +1461,20 @@ async function createUserAuthForMember() {
         });
       
       if (profileError) {
-        console.error('❌ Error creando perfil:', profileError);
         showToast('Error al crear perfil: ' + profileError.message, 'error');
         return;
       }
       
-      console.log('✅ Perfil creado en profiles');
-      
-      // Actualizar member con auth_id
-      const { error: updateError } = await client
-        .from('members')
-        .update({ auth_id: authId })
-        .eq('id', currentProfileMember.id);
-      
-      if (updateError) {
-        console.error('❌ Error actualizando member:', updateError);
-      } else {
-        console.log('✅ Member actualizado con auth_id');
-      }
-      
-      // Actualizar objeto actual
-      currentProfileMember.auth_id = authId;
-      
-      // Actualizar en allMembers
-      const memberIndex = allMembers.findIndex(m => m.id === currentProfileMember.id);
-      if (memberIndex !== -1) {
-        allMembers[memberIndex].auth_id = authId;
-      }
-      
-      // Enviar credenciales por WhatsApp
+      // Enviar credenciales
       if (typeof window.sendWelcomeWithCredentials === 'function') {
         await window.sendWelcomeWithCredentials(currentProfileMember, tempPassword);
-        showToast('✅ Cuenta creada. Credenciales enviadas por WhatsApp', 'success');
-      } else {
-        showToast(`✅ Cuenta creada. Contraseña temporal: ${tempPassword}`, 'success');
       }
       
-      // Actualizar UI
+      showToast('✅ Cuenta creada. Credenciales enviadas por WhatsApp', 'success');
       await updateUserAuthUI();
     }
     
   } catch (error) {
-    console.error('❌ Error en createUserAuthForMember:', error);
     showToast('Error: ' + error.message, 'error');
   }
 }
@@ -1568,17 +1501,43 @@ async function resetUserPassword() {
 
 async function sendCredentialsWhatsApp() {
   if (!currentProfileMember) return;
+  
+  // Primero verificar si existe el profile
+  const client = window.supabaseClient();
+  if (!client) return;
+  
+  const { data: profile } = await client
+    .from('profiles')
+    .select('id')
+    .eq('email', currentProfileMember.email)
+    .maybeSingle();
+  
+  if (!profile) {
+    showToast('⚠️ Este miembro no tiene cuenta de acceso. Crea una primero.', 'warning');
+    return;
+  }
+  
   const tempPassword = generateTemporaryPassword();
+  
   try {
-    const client = window.supabaseClient();
-    if (!client) throw new Error('Supabase no disponible');
-    const { error } = await client.auth.admin.updateUserById(currentProfileMember.auth_id, { password: tempPassword });
-    if (error) { await resetUserPassword(); showToast('📧 Se ha enviado un enlace para restablecer contraseña', 'success'); return; }
+    // Intentar actualizar contraseña en Auth
+    const { error } = await client.auth.admin.updateUserById(profile.id, { password: tempPassword });
+    
+    if (error) { 
+      await resetUserPassword(); 
+      showToast('📧 Se ha enviado un enlace para restablecer contraseña', 'success'); 
+      return; 
+    }
+    
     if (typeof window.sendWelcomeWithCredentials === 'function') {
       await window.sendWelcomeWithCredentials(currentProfileMember, tempPassword);
     }
+    
     showToast('✅ Credenciales reenviadas por WhatsApp', 'success');
-  } catch (error) { await resetUserPassword(); showToast('📧 Se ha enviado un enlace para crear contraseña', 'success'); }
+  } catch (error) { 
+    await resetUserPassword(); 
+    showToast('📧 Se ha enviado un enlace para crear contraseña', 'success'); 
+  }
 }
 
 function showResetPasswordModal() {

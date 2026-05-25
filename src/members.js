@@ -23,7 +23,8 @@ async function loadMembers(filtered = null) {
     const client = window.supabaseClient();
     if (!client) throw new Error('Supabase no disponible');
     
-    let query = client.from('members').select('*').order('name');
+    // ✅ CORREGIDO: No seleccionar auth_id porque no existe en tu tabla
+    let query = client.from('members').select('id, name, email, phone, plan, status, membership_end, created_at, birth_date, height, emergency_contact, emergency_phone, health_notes, goals, photo_url, last_checkin, updated_at').order('name');
     
     if (filtered) {
       const term = filtered.term;
@@ -328,8 +329,14 @@ async function saveMember(event) {
         
       if (result.error) throw result.error;
       
-      const member = allMembers.find(m => m.id === parseInt(memberId));
-      if (member && member.auth_id) {
+      // ✅ CORREGIDO: Buscar profile por EMAIL, no por auth_id
+      const { data: profile } = await client
+        .from('profiles')
+        .select('id')
+        .eq('email', email)
+        .maybeSingle();
+      
+      if (profile) {
         await client
           .from('profiles')
           .update({
@@ -337,7 +344,8 @@ async function saveMember(event) {
             full_name: name,
             updated_at: new Date().toISOString()
           })
-          .eq('id', member.auth_id);
+          .eq('id', profile.id);
+        console.log('✅ Perfil actualizado en profiles');
       }
       
       showToast('Miembro actualizado correctamente', 'success');
@@ -345,7 +353,7 @@ async function saveMember(event) {
     } else {
       // ========== CREAR NUEVO MIEMBRO ==========
       
-      // Verificar si ya existe un miembro con este email en la tabla members
+      // Verificar si ya existe un miembro con este email
       const { data: existingMember } = await client
         .from('members')
         .select('id')
@@ -365,7 +373,7 @@ async function saveMember(event) {
         expirationDate.setMonth(expirationDate.getMonth() + 1);
       }
       
-      // Datos del miembro
+      // Crear el miembro PRIMERO (sin cuenta de acceso aún)
       const memberData = {
         name: name,
         email: email,
@@ -379,11 +387,10 @@ async function saveMember(event) {
         emergency_contact: emergencyContact || null,
         emergency_phone: emergencyPhone || null,
         health_notes: healthNotes || null,
-        goals: goals || null,
-        auth_id: null  // Inicialmente sin cuenta de acceso
+        goals: goals || null
+        // ⚠️ NO incluir auth_id - no existe en tu tabla
       };
       
-      // Insertar miembro primero (sin crear cuenta Auth)
       result = await client
         .from('members')
         .insert([memberData])
@@ -399,7 +406,7 @@ async function saveMember(event) {
         const wantAuth = confirm(`¿Deseas crear una cuenta de acceso para ${newMember.name}?\n\nEsto le permitirá iniciar sesión en la app cliente.\n\nSe usará el correo: ${newMember.email}`);
         
         if (wantAuth) {
-          // Crear cuenta de acceso
+          // Crear usuario en Auth
           const tempPassword = generateTemporaryPassword();
           
           const { data: authUser, error: authError } = await client.auth.signUp({
@@ -434,19 +441,12 @@ async function saveMember(event) {
             
             if (profileError) {
               console.error('Error creando perfil:', profileError);
+              showToast('Error al crear perfil', 'error');
+            } else {
+              console.log('✅ Perfil creado en profiles');
+              await sendWelcomeWithCredentials(newMember, tempPassword);
+              showToast('✅ Cuenta de acceso creada. Credenciales enviadas por WhatsApp', 'success');
             }
-            
-            // Actualizar member con auth_id
-            await client
-              .from('members')
-              .update({ auth_id: authUser.user.id })
-              .eq('id', newMember.id);
-            
-            newMember.auth_id = authUser.user.id;
-            
-            // Enviar credenciales
-            await sendWelcomeWithCredentials(newMember, tempPassword);
-            showToast('✅ Cuenta de acceso creada. Credenciales enviadas por WhatsApp', 'success');
           }
         }
       }
