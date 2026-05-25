@@ -63,7 +63,7 @@ function checkAuth() {
 
 // ============ UI NAVIGATION ============
 async function showPage(page) {
-  const pages = ['dashboard', 'members', 'checkin', 'payments', 'whatsapp'];
+  const pages = ['dashboard', 'members', 'checkin-list', 'qr-scanner', 'payments', 'whatsapp'];
   pages.forEach(p => {
     const el = document.getElementById(`page-${p}`);
     if (el) el.classList.add('hidden');
@@ -72,7 +72,7 @@ async function showPage(page) {
   const activePage = document.getElementById(`page-${page}`);
   if (activePage) activePage.classList.remove('hidden');
   
-  const buttons = ['dashboard', 'members', 'checkin', 'payments', 'whatsapp'];
+  const buttons = ['dashboard', 'members', 'checkin-list', 'qr-scanner', 'payments', 'whatsapp'];
   buttons.forEach(btn => {
     const btnEl = document.getElementById(`btn-${btn}`);
     if (btnEl) btnEl.classList.remove('nav-active');
@@ -81,12 +81,10 @@ async function showPage(page) {
   const activeBtn = document.getElementById(`btn-${page}`);
   if (activeBtn) activeBtn.classList.add('nav-active');
   
-  // ✅ INICIAR CÁMARA SOLO SI ENTRAMOS A CHECK-IN
-  if (page === 'checkin') {
+  // Iniciar cámara SOLO en la página QR
+  if (page === 'qr-scanner') {
     await startQRScanner();
-  } 
-  // ✅ DETENER CÁMARA SI SALIMOS DE CHECK-IN
-  else {
+  } else {
     await stopQRScanner();
   }
 }

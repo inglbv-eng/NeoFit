@@ -205,11 +205,28 @@
         animation: spin 0.8s linear infinite;
         display: inline-block;
     }
+
+    @keyframes floatLogo {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.animate-pulse {
+  animation: floatLogo 3s ease-in-out infinite;
+}
     
     @keyframes spin {
         to {
             transform: rotate(360deg);
         }
+        
     }
 </style>
 </head>
@@ -229,101 +246,149 @@
   <!-- Main App -->
   <div id="mainApp" class="hidden">
     <div class="flex h-screen">
-      <!-- Sidebar -->
-      <div class="w-72 bg-zinc-900/50 backdrop-blur-xl border-r border-zinc-800">
-        <div class="p-6 border-b border-zinc-800">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <img src="img/logo.png" alt="NeoFit Logo" class="sidebar-logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
-              <div class="w-12 h-12 bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl items-center justify-center hidden" style="display: none;">
-                <i class="fas fa-dumbbell text-white text-xl"></i>
-              </div>
-              <div>
-                <h1 class="text-3xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">NeoFit</h1>
-                <p class="text-zinc-500 text-sm">ERP Gimnasio</p>
-              </div>
-            </div>
-            <button onclick="logout()" class="text-zinc-500 hover:text-red-500 transition">
-              <i class="fas fa-sign-out-alt text-xl"></i>
-            </button>
-          </div>
-        </div>
-        
-        <nav class="p-4 space-y-2">
-          <button onclick="showPage('dashboard')" class="nav-active w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition" id="btn-dashboard">
-            <i class="fas fa-chart-line w-5"></i> Dashboard
-          </button>
-          <button onclick="showPage('members')" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 rounded-2xl text-left text-zinc-400 hover:text-white transition" id="btn-members">
-            <i class="fas fa-users w-5"></i> Miembros
-          </button>
-          <button onclick="showPage('checkin')" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 rounded-2xl text-left text-zinc-400 hover:text-white transition" id="btn-checkin">
-            <i class="fas fa-qrcode w-5"></i> Check-in QR
-          </button>
-          <button onclick="showPage('payments')" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 rounded-2xl text-left text-zinc-400 hover:text-white transition" id="btn-payments">
-            <i class="fas fa-credit-card w-5"></i> Pagos
-          </button>
-          <button onclick="showPage('whatsapp')" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 rounded-2xl text-left text-zinc-400 hover:text-white transition" id="btn-whatsapp">
-            <i class="fab fa-whatsapp w-5"></i> WhatsApp
-          </button>
-        </nav>
+     <!-- Sidebar -->
+  <div class="w-64 bg-gradient-to-b from-zinc-950 via-zinc-900 to-black border-r border-zinc-800 flex flex-col shadow-2xl">
+     <!-- LOGO -->
+  <div class="relative p-8 border-b border-zinc-800 overflow-hidden">
+    <!-- Glow background -->
+    <div class="absolute inset-0 bg-sky-500/5 blur-3xl"></div>
+    <!-- Logo container -->
+    <div class="relative flex flex-col items-center justify-center group">
+      <!-- Animated circle glow -->
+      <div class="absolute w-28 h-28 bg-cyan-500/20 rounded-full blur-2xl group-hover:scale-125 transition duration-700"></div>
+      <!-- Logo -->
+      <img 
+        src="img/logo.png" 
+        alt="NeoFit Logo"
+        class="w-28 h-28 object-contain relative z-10 drop-shadow-[0_0_25px_rgba(0,200,255,0.55)] hover:scale-105 transition duration-500 animate-pulse"
+        onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'" >
+
+      <!-- Fallback -->
+      <div class="w-24 h-24 bg-gradient-to-br from-sky-500 to-blue-600 rounded-3xl items-center justify-center hidden shadow-2xl relative z-10">
+        <i class="fas fa-dumbbell text-white text-4xl"></i>
       </div>
+
+      <p class="text-[11px] tracking-[6px] text-zinc-500 uppercase">
+        ERP SYSTEM
+      </p>
+
+    </div>
+  </div>
+
+  <!-- MENU -->
+  <nav class="flex-1 p-4 space-y-3">
+
+    <button onclick="showPage('dashboard')" 
+      class="nav-active w-full flex items-center gap-3 px-5 py-3 rounded-2xl text-left transition bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/20"
+      id="btn-dashboard">
+      <i class="fas fa-chart-line w-5"></i>
+      <span class="font-medium">Dashboard</span>
+    </button>
+
+    <button onclick="showPage('members')" 
+      class="w-full flex items-center gap-3 px-5 py-3 hover:bg-zinc-800 rounded-2xl text-left text-zinc-400 hover:text-white transition"
+      id="btn-members">
+      <i class="fas fa-users w-5"></i>
+      <span>Miembros</span>
+    </button>
+
+    <button onclick="showPage('checkin-list')" 
+      class="w-full flex items-center gap-3 px-5 py-3 hover:bg-zinc-800 rounded-2xl text-left text-zinc-400 hover:text-white transition"
+      id="btn-checkin-list">
+      <i class="fas fa-calendar-check w-5"></i>
+      <span>Check-in</span>
+    </button>
+
+    <button onclick="showPage('qr-scanner')" 
+      class="w-full flex items-center gap-3 px-5 py-3 hover:bg-zinc-800 rounded-2xl text-left text-zinc-400 hover:text-white transition"
+      id="btn-qr-scanner">
+      <i class="fas fa-qrcode w-5"></i>
+      <span>QR</span>
+    </button>
+
+    <button onclick="showPage('payments')" 
+      class="w-full flex items-center gap-3 px-5 py-3 hover:bg-zinc-800 rounded-2xl text-left text-zinc-400 hover:text-white transition"
+      id="btn-payments">
+      <i class="fas fa-credit-card w-5"></i>
+      <span>Pagos</span>
+    </button>
+
+    <button onclick="showPage('whatsapp')" 
+      class="w-full flex items-center gap-3 px-5 py-3 hover:bg-zinc-800 rounded-2xl text-left text-zinc-400 hover:text-white transition"
+      id="btn-whatsapp">
+      <i class="fab fa-whatsapp w-5"></i>
+      <span>WhatsApp</span>
+    </button>
+
+  </nav>
+
+  <!-- FOOTER -->
+  <div class="p-4 border-t border-zinc-800">
+    <button onclick="logout()" 
+      class="w-full flex items-center gap-3 px-5 py-3 rounded-2xl text-red-400 hover:bg-red-500/20 transition">
+      <i class="fas fa-sign-out-alt w-5"></i>
+      <span>Salir del Sistema</span>
+    </button>
+  </div>
+
+</div>
 
       <!-- Main Content -->
       <div class="flex-1 overflow-auto p-8">
         
-        <!-- Dashboard -->
-        <div id="page-dashboard" class="animate-fade-in">
-          <h2 class="text-3xl font-bold mb-8">Dashboard Principal</h2>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div class="bg-gradient-to-br from-zinc-900 to-zinc-800 p-6 rounded-3xl card-hover">
-              <div class="flex justify-between items-start">
-                <div>
-                  <p class="text-zinc-400 text-sm">Miembros Activos</p>
-                  <p class="text-5xl font-bold mt-2" id="activeMembers">0</p>
-                </div>
-                <i class="fas fa-user-check text-4xl text-green-500"></i>
-              </div>
-            </div>
-            <div class="bg-gradient-to-br from-zinc-900 to-zinc-800 p-6 rounded-3xl card-hover">
-              <div class="flex justify-between items-start">
-                <div>
-                  <p class="text-zinc-400 text-sm">Ingresos del Mes</p>
-                  <p class="text-5xl font-bold mt-2" id="monthlyIncome">$0</p>
-                </div>
-                <i class="fas fa-dollar-sign text-4xl text-yellow-500"></i>
-              </div>
-            </div>
-            <div class="bg-gradient-to-br from-zinc-900 to-zinc-800 p-6 rounded-3xl card-hover">
-              <div class="flex justify-between items-start">
-                <div>
-                  <p class="text-zinc-400 text-sm">Check-ins Hoy</p>
-                  <p class="text-5xl font-bold mt-2" id="todayCheckins">0</p>
-                </div>
-                <i class="fas fa-clipboard-list text-4xl text-blue-500"></i>
-              </div>
-            </div>
-            <div class="bg-gradient-to-br from-zinc-900 to-zinc-800 p-6 rounded-3xl card-hover">
-              <div class="flex justify-between items-start">
-                <div>
-                  <p class="text-zinc-400 text-sm">Por Vencer (7 días)</p>
-                  <p class="text-5xl font-bold mt-2 text-orange-500" id="expiringMembers">0</p>
-                </div>
-                <i class="fas fa-clock text-4xl text-orange-500"></i>
-              </div>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="bg-zinc-900/50 backdrop-blur p-6 rounded-3xl border border-zinc-800">
-              <h3 class="text-xl font-semibold mb-4">Check-ins Últimos 7 Días</h3>
-              <canvas id="attendanceChart" height="200"></canvas>
-            </div>
-            <div class="bg-zinc-900/50 backdrop-blur p-6 rounded-3xl border border-zinc-800">
-              <h3 class="text-xl font-semibold mb-4">Ingresos por Mes</h3>
-              <canvas id="incomeChart" height="200"></canvas>
-            </div>
-          </div>
+       <!-- Dashboard -->
+<div id="page-dashboard" class="animate-fade-in">
+   <h2 class="text-3xl font-bold mb-6">Dashboard Principal</h2>
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="bg-gradient-to-br from-zinc-900 to-zinc-800 p-3 rounded-xl card-hover">
+      <div class="flex justify-between items-start">
+        <div>
+          <p class="text-zinc-400 text-[10px]">Miembros Activos</p>
+          <p class="text-4xl font-bold mt-0.5" id="activeMembers">0</p>
         </div>
+        <i class="fas fa-user-check text-xl text-green-500"></i>
+      </div>
+    </div>
+    <div class="bg-gradient-to-br from-zinc-900 to-zinc-800 p-3 rounded-xl card-hover">
+      <div class="flex justify-between items-start">
+        <div>
+          <p class="text-zinc-400 text-[10px]">Ingresos del Mes</p>
+          <p class="text-4xl font-bold mt-0.5" id="monthlyIncome">$0</p>
+        </div>
+        <i class="fas fa-dollar-sign text-xl text-yellow-500"></i>
+      </div>
+    </div>
+    <div class="bg-gradient-to-br from-zinc-900 to-zinc-800 p-3 rounded-xl card-hover">
+      <div class="flex justify-between items-start">
+        <div>
+          <p class="text-zinc-400 text-[10px]">Check-ins Hoy</p>
+          <p class="text-4xl font-bold mt-0.5" id="todayCheckins">0</p>
+        </div>
+        <i class="fas fa-clipboard-list text-xl text-blue-500"></i>
+      </div>
+    </div>
+    <div class="bg-gradient-to-br from-zinc-900 to-zinc-800 p-3 rounded-xl card-hover">
+      <div class="flex justify-between items-start">
+        <div>
+          <p class="text-zinc-400 text-[10px]">Por Vencer (7 días)</p>
+          <p class="text-4xl font-bold mt-0.5 text-orange-500" id="expiringMembers">0</p>
+        </div>
+        <i class="fas fa-clock text-xl text-orange-500"></i>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="bg-zinc-900/50 backdrop-blur p-4 rounded-xl border border-zinc-800">
+      <h3 class="text-base font-semibold mb-2">Check-ins Últimos 7 Días</h3>
+      <canvas id="attendanceChart" height="180"></canvas>
+    </div>
+    <div class="bg-zinc-900/50 backdrop-blur p-4 rounded-xl border border-zinc-800">
+      <h3 class="text-base font-semibold mb-2">Ingresos por Mes</h3>
+      <canvas id="incomeChart" height="180"></canvas>
+    </div>
+  </div>
+</div>
 
         <!-- Members Page -->
         <div id="page-members" class="hidden animate-fade-in">
@@ -416,32 +481,35 @@
           <div id="cardView" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 hidden"></div>
         </div>
         
-        <!-- Check-in Page -->
-        <div id="page-checkin" class="hidden animate-fade-in">
-          <h2 class="text-3xl font-bold mb-8">Check-in con QR</h2>
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div class="bg-zinc-900/50 backdrop-blur p-6 rounded-3xl border border-zinc-800">
-              <h3 class="text-xl font-semibold mb-4">Escanear Código QR</h3>
-              <div class="qr-scanner bg-black rounded-2xl overflow-hidden" style="min-height: 350px; position: relative;">
-                <div id="reader" style="width: 100%; min-height: 350px;"></div>
-              </div>
-              <div class="mt-4">
-                <input type="text" id="manualQRInput" placeholder="O ingresa código QR manualmente (ej: 1, 2, 3...)" 
-                       class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3 focus:outline-none focus:border-sky-500">
-                <button onclick="processCheckin()" class="mt-3 w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-semibold transition">
-                  <i class="fas fa-check-circle mr-2"></i> Registrar Check-in
-                </button>
-              </div>
-            </div>
-            <div class="bg-zinc-900/50 backdrop-blur p-6 rounded-3xl border border-zinc-800">
-              <h3 class="text-xl font-semibold mb-4">
-                Check-ins de Hoy 
-                <span class="text-sky-400" id="todayCount">0</span>
-              </h3>
-              <div id="todayCheckinsList" class="space-y-3 max-h-96 overflow-y-auto"></div>
-            </div>
-          </div>
-        </div>
+        <div id="page-checkin-list" class="hidden animate-fade-in">
+  <h2 class="text-3xl font-bold mb-8">Registro de Asistencias</h2>
+  <div class="bg-zinc-900/50 backdrop-blur p-6 rounded-3xl border border-zinc-800">
+    <h3 class="text-xl font-semibold mb-4">
+      Check-ins de Hoy 
+      <span class="text-sky-400" id="todayCount">0</span>
+    </h3>
+    <div id="todayCheckinsList" class="space-y-3 max-h-[70vh] overflow-y-auto"></div>
+  </div>
+</div>
+
+<div id="page-qr-scanner" class="hidden animate-fade-in">
+  <h2 class="text-3xl font-bold mb-8">Control de Acceso</h2>
+  <div class="max-w-md mx-auto">
+    <div class="bg-zinc-900/50 backdrop-blur p-6 rounded-3xl border border-zinc-800">
+      <h3 class="text-xl font-semibold mb-4">Escanear Código QR</h3>
+      <div class="qr-scanner bg-black rounded-2xl overflow-hidden" style="min-height: 350px;">
+        <div id="reader" style="width: 100%; min-height: 350px;"></div>
+      </div>
+      <div class="mt-4">
+        <input type="text" id="manualQRInput" placeholder="O ingresa ID manualmente" 
+               class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3">
+        <button onclick="processCheckin()" class="mt-3 w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-semibold transition">
+          <i class="fas fa-check-circle mr-2"></i> Registrar Entrada
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
         <!-- Payments Page -->
         <div id="page-payments" class="hidden animate-fade-in">
