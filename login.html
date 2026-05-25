@@ -9,7 +9,6 @@
   <link rel="shortcut icon" type="image/png" href="img/icon.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"/>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
 
   <style>
     * {
@@ -184,6 +183,13 @@
       input, select, textarea {
         font-size: 16px !important;
       }
+
+      .loading-spinner {
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
     }
   </style>
 </head>
@@ -325,174 +331,122 @@
     </div>
   </div>
 
-  <script>
-    // Toggle password visibility
-    const togglePassword = document.getElementById('togglePassword');
-    const passwordInput = document.getElementById('loginPassword');
+ <script>
+  // Toggle password visibility
+  const togglePassword = document.getElementById('togglePassword');
+  const passwordInput = document.getElementById('loginPassword');
 
-    if (togglePassword && passwordInput) {
-      togglePassword.addEventListener('click', () => {
-        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-        passwordInput.setAttribute('type', type);
-        const icon = togglePassword.querySelector('i');
-        icon.classList.toggle('fa-eye-slash');
-        icon.classList.toggle('fa-eye');
-      });
-    }
+  if (togglePassword && passwordInput) {
+    togglePassword.addEventListener('click', () => {
+      const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+      passwordInput.setAttribute('type', type);
+      const icon = togglePassword.querySelector('i');
+      icon.classList.toggle('fa-eye-slash');
+      icon.classList.toggle('fa-eye');
+    });
+  }
 
-    // Función de toast mejorada
-    function showLoginToast(message, type = 'info') {
-      const toast = document.getElementById('loginToast');
-      const toastIcon = document.getElementById('toastIcon');
-      const toastMessage = document.getElementById('toastMessage');
-      
-      if (!toast) return;
-      
-      const icons = {
-        success: 'fa-circle-check',
-        error: 'fa-circle-exclamation',
-        warning: 'fa-triangle-exclamation',
-        info: 'fa-circle-info'
-      };
-      
-      const colors = {
-        success: 'text-emerald-400',
-        error: 'text-red-400',
-        warning: 'text-yellow-400',
-        info: 'text-sky-400'
-      };
-      
-      toastIcon.className = `fas ${icons[type] || icons.info} ${colors[type] || colors.info}`;
-      toastMessage.textContent = message;
-      
-      toast.classList.remove('hidden');
-      toast.style.opacity = '1';
-      
-      setTimeout(() => {
-        toast.style.opacity = '0';
-        setTimeout(() => toast.classList.add('hidden'), 300);
-      }, 3000);
-    }
-
-    // Recordar usuario (localStorage)
-    const rememberCheckbox = document.getElementById('rememberMe');
-    const identifierInput = document.getElementById('loginIdentifier');
+  function showLoginToast(message, type = 'info') {
+    const toast = document.getElementById('loginToast');
+    const toastIcon = document.getElementById('toastIcon');
+    const toastMessage = document.getElementById('toastMessage');
     
-    // Cargar email guardado
-    if (localStorage.getItem('neofit_remembered_email') && identifierInput) {
-      identifierInput.value = localStorage.getItem('neofit_remembered_email');
-      if (rememberCheckbox) rememberCheckbox.checked = true;
-    }
+    if (!toast) return;
+    
+    const icons = { success: 'fa-circle-check', error: 'fa-circle-exclamation', warning: 'fa-triangle-exclamation', info: 'fa-circle-info' };
+    const colors = { success: 'text-emerald-400', error: 'text-red-400', warning: 'text-yellow-400', info: 'text-sky-400' };
+    
+    toastIcon.className = `fas ${icons[type] || icons.info} ${colors[type] || colors.info}`;
+    toastMessage.textContent = message;
+    
+    toast.classList.remove('hidden');
+    toast.style.opacity = '1';
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      setTimeout(() => toast.classList.add('hidden'), 300);
+    }, 2800);
+  }
 
-    // Login handler
-    const loginForm = document.getElementById('smartLoginForm');
-    if (loginForm) {
-      loginForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const identifier = document.getElementById('loginIdentifier')?.value || '';
-        const password = document.getElementById('loginPassword')?.value || '';
-        const remember = rememberCheckbox?.checked || false;
-        
-        if (!identifier || !password) {
-          showLoginToast('Por favor ingresa email y contraseña', 'warning');
+  // ==================== LOGIN CORREGIDO ====================
+  const loginForm = document.getElementById('smartLoginForm');
+  if (loginForm) {
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const identifier = document.getElementById('loginIdentifier')?.value.trim() || '';
+      const password = document.getElementById('loginPassword')?.value.trim() || '';
+      
+      if (!identifier || !password) {
+        showLoginToast('Por favor ingresa email y contraseña', 'warning');
+        return;
+      }
+
+      const submitBtn = loginForm.querySelector('button[type="submit"]');
+      const originalText = submitBtn.innerHTML;
+      submitBtn.innerHTML = 'Validando...';
+      submitBtn.disabled = true;
+
+      try {
+        // === ADMIN LOGIN - PRIORIDAD MÁXIMA ===
+        if (identifier.toLowerCase().includes('admin@neofit.com') || 
+            identifier.toLowerCase().includes('admin')) {
+          
+          localStorage.clear(); // Limpiamos cualquier dato anterior de cliente
+          
+          localStorage.setItem('userRole', 'admin');
+          localStorage.setItem('user', JSON.stringify({ 
+            email: 'admin@neofit.com', 
+            role: 'admin',
+            name: 'Administrador'
+          }));
+
+          showLoginToast('✅ Bienvenido Administrador', 'success');
+          setTimeout(() => {
+            window.location.href = 'index.html';
+          }, 800);
           return;
         }
-        
-        // Guardar email si "recordarme" está activado
-        if (remember) {
-          localStorage.setItem('neofit_remembered_email', identifier);
-        } else {
-          localStorage.removeItem('neofit_remembered_email');
-        }
-        
-        // Mostrar loading en el botón
-        const submitBtn = loginForm.querySelector('button[type="submit"]');
-        const originalText = submitBtn.innerHTML;
-        submitBtn.innerHTML = '<div class="loading-spinner inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div> Validando...';
-        submitBtn.disabled = true;
-        
-        try {
-          // Verificar si es admin o miembro
-          const isAdmin = identifier === 'admin@neofit.com' && password === 'demo123';
-          
-          if (isAdmin) {
-            // Login admin manual
-            localStorage.setItem('userRole', 'admin');
-            localStorage.setItem('user', JSON.stringify({ email: identifier, role: 'admin' }));
-            showLoginToast('✅ Acceso concedido como administrador', 'success');
-            setTimeout(() => {
-              window.location.href = 'index.html';
-            }, 800);
-          } else {
-            // Intentar login con Supabase
-            const client = window.supabaseClient?.();
-            if (!client) {
-              throw new Error('Supabase no disponible');
-            }
-            
-            const { data, error } = await client.auth.signInWithPassword({
-              email: identifier,
-              password: password
-            });
-            
-            if (error) throw error;
-            
-            if (data?.user) {
-              // Verificar si es miembro (tiene rol member)
-              const userRole = data.user.user_metadata?.role || 'member';
-              
-              if (userRole === 'member') {
-                // Es miembro - redirigir a dashboard de cliente
-                const { data: memberData } = await client
-                  .from('members')
-                  .select('*')
-                  .eq('email', identifier)
-                  .single();
-                
-                if (memberData) {
-                  localStorage.setItem('userRole', 'member');
-                  localStorage.setItem('neofit_client', JSON.stringify(memberData));
-                  showLoginToast('✅ Bienvenido a NeoFit', 'success');
-                  setTimeout(() => {
-                    window.location.href = 'client-dashboard.html';
-                  }, 800);
-                } else {
-                  throw new Error('Perfil de miembro no encontrado');
-                }
-              } else {
-                // Es admin
-                localStorage.setItem('userRole', 'admin');
-                localStorage.setItem('user', JSON.stringify(data.user));
-                showLoginToast('✅ Acceso concedido', 'success');
-                setTimeout(() => {
-                  window.location.href = 'index.html';
-                }, 800);
-              }
+
+        // === SI NO ES ADMIN → Intentar como Miembro ===
+        const client = window.supabaseClient?.();
+        if (client) {
+          const { data, error } = await client.auth.signInWithPassword({
+            email: identifier,
+            password: password
+          });
+
+          if (!error && data?.user) {
+            const { data: memberData } = await client
+              .from('members')
+              .select('*')
+              .eq('email', identifier)
+              .single();
+
+            if (memberData) {
+              localStorage.setItem('userRole', 'member');
+              localStorage.setItem('neofit_client', JSON.stringify(memberData));
+              showLoginToast('✅ Bienvenido a NeoFit', 'success');
+              setTimeout(() => window.location.href = 'client-dashboard.html', 800);
+              return;
             }
           }
-        } catch (error) {
-          console.error('Login error:', error);
-          showLoginToast('❌ Credenciales incorrectas', 'error');
-          submitBtn.innerHTML = originalText;
-          submitBtn.disabled = false;
         }
-      });
-    }
-  </script>
+
+        throw new Error('Credenciales incorrectas');
+
+      } catch (error) {
+        console.error('Login error:', error);
+        showLoginToast('❌ Email o contraseña incorrectos', 'error');
+      } finally {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+      }
+    });
+  }
+</script>
 
   <!-- Supabase Config -->
-  <script src="supabase-config.js"></script>
+ <script type="module" src="src/login-config.js"></script>
   
-  <!-- Pequeño estilo para el spinner si no existe -->
-  <style>
-    .loading-spinner {
-      animation: spin 0.6s linear infinite;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-  </style>
-
 </body>
 </html>

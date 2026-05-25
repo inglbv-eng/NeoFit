@@ -21,8 +21,6 @@
   <script src="https://unpkg.com/qrcodejs@1.0.0/qrcode.min.js"></script>
   <!-- HTML5 QR Code -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <!-- Supabase JS -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
   
   <style>
     * {
@@ -881,29 +879,26 @@
       </form>
     </div>
   </div>
-
-  <script>
-  (function checkAdminAccess() {
-    const userRole = localStorage.getItem('userRole');
-    const user = localStorage.getItem('user');
-    if (!userRole || userRole !== 'admin' || !user) {
-      window.location.href = 'login.html';
-      return;
+<script type="module" src="src/main.js"></script>
+<script>
+  // Solo para asegurar que toggleMobileMenu esté disponible
+  setTimeout(() => {
+    if (!window.toggleMobileMenu) {
+      window.toggleMobileMenu = function() {
+        const sidebar = document.querySelector('.w-72');
+        if (sidebar) {
+          const currentLeft = sidebar.style.left;
+          if (currentLeft === '0px') {
+            sidebar.style.left = '-100%';
+            document.body.style.overflow = 'auto';
+          } else {
+            sidebar.style.left = '0';
+            document.body.style.overflow = 'hidden';
+          }
+        }
+      };
     }
-    try {
-      const userData = JSON.parse(user);
-      if (userData.email !== 'admin@neofit.com') {
-        localStorage.removeItem('userRole');
-        localStorage.removeItem('user');
-        window.location.href = 'login.html';
-      }
-    } catch (e) {
-      window.location.href = 'login.html';
-    }
-  })();
-  </script>
-
-  <script src="supabase-config.js"></script>
-  <script src="app.js"></script>
+  }, 100);
+</script>
 </body>
 </html>

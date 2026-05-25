@@ -1,18 +1,24 @@
-// client-app.js - App para miembros (ACTUALIZADO con soporte para fotos)
+// client-app.js - CORREGIDO
 let currentClient = null;
 let clientProgressChart = null;
 
-// Verificar acceso de cliente
+// Verificar acceso de cliente SOLO si estamos en la página de cliente
 (function checkMemberAccess() {
+  if (!window.location.pathname.includes('client-dashboard.html')) {
+    return; // No ejecutar en otras páginas
+  }
+
   const userRole = localStorage.getItem('userRole');
   const clientData = localStorage.getItem('neofit_client');
   
   if (!userRole || userRole !== 'member' || !clientData) {
+    console.log('🚫 Acceso denegado a cliente');
     window.location.href = 'login.html';
     return;
   }
   
   currentClient = JSON.parse(clientData);
+  console.log('✅ Cliente cargado:', currentClient.name);
 })();
 
 // Funciones auxiliares
@@ -340,14 +346,19 @@ async function loadClientRoutine() {
   `;
 }
 
+// 1. CORREGIR quickClientCheckin() - reemplazar con:
 async function quickClientCheckin() {
-  const button = document.querySelector('button[onclick="quickClientCheckin()"]');
   if (!currentClient) {
     showClientToast('Error: No se encontró información del cliente', 'error');
     return;
   }
+  
+  const button = document.querySelector('.btn-primary-glow');
+  if (!button) {
+    showClientToast('Error: Botón no encontrado', 'error');
+    return;
+  }
 
-  // Efecto de carga en el botón
   const originalHTML = button.innerHTML;
   button.disabled = true;
   button.innerHTML = `<i class="fas fa-spinner fa-spin text-xl"></i> Registrando...`;
@@ -356,34 +367,45 @@ async function quickClientCheckin() {
     const supabase = window.supabaseClient();
     if (!supabase) throw new Error('Supabase no disponible');
 
-    // Verificar membresía activa
     if (new Date(currentClient.membership_end) < new Date()) {
       showClientToast('⚠️ Tu membresía está vencida', 'error');
       return;
     }
 
-    // ✅ Insertar sin enviar checkin_time (usa el DEFAULT de la tabla)
+    // Verificar check-in duplicado
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+
+    const { data: existingCheckin } = await supabase
+      .from('checkins')
+      .select('id')
+      .eq('member_id', currentClient.id)
+      .gte('checkin_time', `${todayStr} 00:00:00`)
+      .lte('checkin_time', `${todayStr} 23:59:59`)
+      .limit(1);
+
+    if (existingCheckin && existingCheckin.length > 0) {
+      showClientToast('⚠️ Ya registraste tu asistencia hoy', 'warning');
+      return;
+    }
+
+    const localDateTimeString = `${year}-${month}-${day} ${String(today.getHours()).padStart(2, '0')}:${String(today.getMinutes()).padStart(2, '0')}:${String(today.getSeconds()).padStart(2, '0')}`;
+
     const { error } = await supabase
       .from('checkins')
-      .insert([{
-        member_id: currentClient.id
-        // checkin_time se llena automáticamente con hora de México
-      }]);
+      .insert([{ member_id: currentClient.id, checkin_time: localDateTimeString }]);
 
     if (error) throw error;
 
-    // Actualizar último check-in del miembro
-    const now = new Date();
-    const localTime = now.toISOString().slice(0, 19).replace('T', ' ');
-
     await supabase
       .from('members')
-      .update({ last_checkin: localTime })
+      .update({ last_checkin: localDateTimeString })
       .eq('id', currentClient.id);
 
     showClientToast('✅ ¡Asistencia registrada correctamente! 💪', 'success');
-
-    // Actualizar la lista de check-ins inmediatamente
     await loadClientCheckins();
 
   } catch (error) {
@@ -393,6 +415,16 @@ async function quickClientCheckin() {
     button.disabled = false;
     button.innerHTML = originalHTML;
   }
+}
+
+// 2. MEJORAR refreshClientData()
+function refreshClientData() {
+  const clientData = localStorage.getItem('neofit_client');
+  if (clientData) {
+    currentClient = JSON.parse(clientData);
+  }
+  loadClientData();
+  showClientToast('🔄 Datos actualizados', 'success');
 }
 
 function downloadClientQR() {
@@ -407,14 +439,24 @@ function downloadClientQR() {
   }
 }
 
-function refreshClientData() {
-  loadClientData();
-  showClientToast('🔄 Datos actualizados');
-}
-
 // Inicializar
 document.addEventListener('DOMContentLoaded', () => {
   if (currentClient) {
     loadClientData();
   }
 });
+
+// src/client-app.js - al final
+
+window.logoutClient = logoutClient
+window.showClientTab = showClientTab
+window.loadClientData = loadClientData
+window.loadClientPhoto = loadClientPhoto
+window.showInitialsAvatar = showInitialsAvatar
+window.loadProfileDetails = loadProfileDetails
+window.loadClientCheckins = loadClientCheckins
+window.loadClientProgress = loadClientProgress
+window.loadClientRoutine = loadClientRoutine
+window.quickClientCheckin = quickClientCheckin
+window.refreshClientData = refreshClientData
+window.downloadClientQR = downloadClientQR
