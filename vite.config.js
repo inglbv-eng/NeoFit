@@ -1,13 +1,10 @@
-// vite.config.js
 import { defineConfig } from 'vite'
 import { resolve } from 'path'
 
 export default defineConfig({
-  server: {
-    port: 3000,
-    open: true
-  },
+  root: '.',
   build: {
+    outDir: 'dist',
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
@@ -15,5 +12,10 @@ export default defineConfig({
         client: resolve(__dirname, 'client-dashboard.html')
       }
     }
-  }
+  },
+  server: {
+    port: 3000
+  },
+  // ✅ Importante para Vercel
+  publicDir: 'public'
 })
