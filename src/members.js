@@ -305,6 +305,7 @@ async function saveMember(event) {
     let result;
     
     if (memberId) {
+      // ========== ACTUALIZAR MIEMBRO EXISTENTE ==========
       const updateData = {
         name: name,
         email: email,
@@ -342,6 +343,9 @@ async function saveMember(event) {
       showToast('Miembro actualizado correctamente', 'success');
       
     } else {
+      // ========== CREAR NUEVO MIEMBRO ==========
+      
+      // Verificar si ya existe un miembro con este email en la tabla members
       const { data: existingMember } = await client
         .from('members')
         .select('id')
@@ -353,46 +357,7 @@ async function saveMember(event) {
         return;
       }
       
-      const tempPassword = generateTemporaryPassword();
-      
-      const { data: authUser, error: authError } = await client.auth.signUp({
-        email: email,
-        password: tempPassword,
-        options: {
-          data: {
-            name: name,
-            role: 'member',
-            phone: phone
-          }
-        }
-      });
-      
-      if (authError) {
-        if (authError.message.includes('already registered')) {
-          console.log('⚠️ Usuario ya existe, continuando...');
-        } else {
-          throw authError;
-        }
-      }
-      
-      if (authUser?.user?.id) {
-        const { error: profileError } = await client
-          .from('profiles')
-          .insert({
-            id: authUser.user.id,
-            email: email,
-            full_name: name,
-            role: 'member',
-            created_at: new Date().toISOString()
-          });
-        
-        if (profileError) {
-          console.error('Error creando perfil:', profileError);
-        } else {
-          console.log('✅ Perfil creado en profiles');
-        }
-      }
-      
+      // Calcular fecha de expiración
       const expirationDate = new Date();
       if (plan === 'Anual') {
         expirationDate.setFullYear(expirationDate.getFullYear() + 1);
@@ -400,6 +365,7 @@ async function saveMember(event) {
         expirationDate.setMonth(expirationDate.getMonth() + 1);
       }
       
+      // Datos del miembro
       const memberData = {
         name: name,
         email: email,
@@ -414,9 +380,10 @@ async function saveMember(event) {
         emergency_phone: emergencyPhone || null,
         health_notes: healthNotes || null,
         goals: goals || null,
-        auth_id: authUser?.user?.id || null
+        auth_id: null  // Inicialmente sin cuenta de acceso
       };
       
+      // Insertar miembro primero (sin crear cuenta Auth)
       result = await client
         .from('members')
         .insert([memberData])
@@ -426,16 +393,68 @@ async function saveMember(event) {
       
       if (result.data && result.data[0]) {
         const newMember = result.data[0];
-        await sendWelcomeWithCredentials(newMember, tempPassword);
+        showToast(`✅ ${newMember.name} registrado correctamente`, 'success');
+        
+        // Preguntar si desea crear cuenta de acceso
+        const wantAuth = confirm(`¿Deseas crear una cuenta de acceso para ${newMember.name}?\n\nEsto le permitirá iniciar sesión en la app cliente.\n\nSe usará el correo: ${newMember.email}`);
+        
+        if (wantAuth) {
+          // Crear cuenta de acceso
+          const tempPassword = generateTemporaryPassword();
+          
+          const { data: authUser, error: authError } = await client.auth.signUp({
+            email: email,
+            password: tempPassword,
+            options: {
+              data: {
+                name: name,
+                role: 'member',
+                phone: phone
+              }
+            }
+          });
+          
+          if (authError) {
+            if (authError.message.includes('already registered')) {
+              showToast('⚠️ El email ya está registrado. No se pudo crear cuenta de acceso.', 'warning');
+            } else {
+              showToast('Error al crear cuenta: ' + authError.message, 'error');
+            }
+          } else if (authUser?.user?.id) {
+            // Crear perfil en profiles
+            const { error: profileError } = await client
+              .from('profiles')
+              .insert({
+                id: authUser.user.id,
+                email: email,
+                full_name: name,
+                role: 'member',
+                created_at: new Date().toISOString()
+              });
+            
+            if (profileError) {
+              console.error('Error creando perfil:', profileError);
+            }
+            
+            // Actualizar member con auth_id
+            await client
+              .from('members')
+              .update({ auth_id: authUser.user.id })
+              .eq('id', newMember.id);
+            
+            newMember.auth_id = authUser.user.id;
+            
+            // Enviar credenciales
+            await sendWelcomeWithCredentials(newMember, tempPassword);
+            showToast('✅ Cuenta de acceso creada. Credenciales enviadas por WhatsApp', 'success');
+          }
+        }
       }
-      
-      showToast(`✅ Miembro creado. Credenciales enviadas por WhatsApp`, 'success');
     }
     
+    // Cerrar modal y recargar datos
     const memberModal = document.getElementById('memberModal');
-    if (memberModal) {
-      memberModal.classList.add('hidden');
-    }
+    if (memberModal) memberModal.classList.add('hidden');
     
     await loadMembers();
     if (typeof loadDashboardData === 'function') {
@@ -443,13 +462,10 @@ async function saveMember(event) {
     }
     
     const memberForm = document.getElementById('memberForm');
-    if (memberForm) {
-      memberForm.reset();
-    }
+    if (memberForm) memberForm.reset();
+    
     const memberIdField = document.getElementById('memberId');
-    if (memberIdField) {
-      memberIdField.value = '';
-    }
+    if (memberIdField) memberIdField.value = '';
     
   } catch (error) {
     console.error('Error:', error);

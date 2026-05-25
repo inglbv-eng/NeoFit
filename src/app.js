@@ -14,6 +14,8 @@ let progressChart = null;
 let isInitializing = false;
 let isLoadingDashboard = false;
 let currentView = 'table';
+let lastChartsLoad = 0;
+const CHARTS_REFRESH_INTERVAL = 30000; // 30 segundos
 
 // ============ AUTH ============
 function logout() {
@@ -63,7 +65,7 @@ function checkAuth() {
 
 // ============ UI NAVIGATION ============
 async function showPage(page) {
-  const pages = ['dashboard', 'members', 'checkin-list', 'qr-scanner', 'payments', 'whatsapp'];
+  const pages = ['dashboard', 'members', 'checkin', 'payments', 'whatsapp'];
   pages.forEach(p => {
     const el = document.getElementById(`page-${p}`);
     if (el) el.classList.add('hidden');
@@ -72,7 +74,7 @@ async function showPage(page) {
   const activePage = document.getElementById(`page-${page}`);
   if (activePage) activePage.classList.remove('hidden');
   
-  const buttons = ['dashboard', 'members', 'checkin-list', 'qr-scanner', 'payments', 'whatsapp'];
+  const buttons = ['dashboard', 'members', 'checkin', 'payments', 'whatsapp'];
   buttons.forEach(btn => {
     const btnEl = document.getElementById(`btn-${btn}`);
     if (btnEl) btnEl.classList.remove('nav-active');
@@ -81,10 +83,12 @@ async function showPage(page) {
   const activeBtn = document.getElementById(`btn-${page}`);
   if (activeBtn) activeBtn.classList.add('nav-active');
   
-  // Iniciar cámara SOLO en la página QR
-  if (page === 'qr-scanner') {
+  // ✅ INICIAR CÁMARA SOLO SI ENTRAMOS A CHECK-IN
+  if (page === 'checkin') {
     await startQRScanner();
-  } else {
+  } 
+  // ✅ DETENER CÁMARA SI SALIMOS DE CHECK-IN
+  else {
     await stopQRScanner();
   }
 }
@@ -141,7 +145,7 @@ async function loadDashboardData() {
     const expiringMembersEl = document.getElementById('expiringMembers');
     if (expiringMembersEl) expiringMembersEl.textContent = expiringCount || 0;
     
-    // Cargar gráficos (solo si los canvas existen)
+    // Cargar gráficos (solo si los canvas existen y ha pasado el tiempo mínimo)
     await loadCharts();
     
   } catch (error) {
@@ -156,6 +160,16 @@ async function loadCharts() {
   try {
     const client = window.supabaseClient();
     if (!client) throw new Error('Supabase no disponible');
+    
+    const now = Date.now();
+    // Si los gráficos ya existen y no ha pasado el tiempo mínimo, solo actualizar datos
+    if (attendanceChart && incomeChart && (now - lastChartsLoad) < CHARTS_REFRESH_INTERVAL) {
+      await updateChartData();
+      console.log('✅ Gráficos actualizados (sin recrear)');
+      return;
+    }
+    
+    lastChartsLoad = now;
     
     // Destruir gráficos existentes
     if (attendanceChart) {
@@ -322,7 +336,72 @@ async function loadCharts() {
   }
 }
 
-// ============ CHECK-IN  QR stop ========
+async function updateChartData() {
+  try {
+    const client = window.supabaseClient();
+    if (!client) return;
+    
+    // Actualizar datos de asistencia (últimos 7 días)
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      last7Days.push(date.toISOString().split('T')[0]);
+    }
+    
+    const attendanceData = [];
+    for (const date of last7Days) {
+      const nextDay = new Date(date);
+      nextDay.setDate(nextDay.getDate() + 1);
+      
+      const { count } = await client
+        .from('checkins')
+        .select('*', { count: 'exact', head: true })
+        .gte('checkin_time', date)
+        .lt('checkin_time', nextDay.toISOString().split('T')[0]);
+      attendanceData.push(count || 0);
+    }
+    
+    if (attendanceChart) {
+      attendanceChart.data.datasets[0].data = attendanceData;
+      attendanceChart.update();
+    }
+    
+    // Actualizar datos de ingresos
+    const months = [];
+    const incomeData = [];
+    const currentDate = new Date();
+    
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+      const monthStr = date.toISOString().slice(0, 7);
+      months.push(date.toLocaleString('es', { month: 'short' }));
+      
+      const firstDay = `${monthStr}-01`;
+      const lastDayDate = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+      const lastDay = `${monthStr}-${lastDayDate.getDate()}`;
+      
+      const { data } = await client
+        .from('payments')
+        .select('amount')
+        .gte('payment_date', firstDay)
+        .lte('payment_date', lastDay);
+      
+      const total = data?.reduce((sum, p) => sum + parseFloat(p.amount), 0) || 0;
+      incomeData.push(total);
+    }
+    
+    if (incomeChart) {
+      incomeChart.data.datasets[0].data = incomeData;
+      incomeChart.update();
+    }
+    
+  } catch (error) {
+    console.error('Error updating chart data:', error);
+  }
+}
+
+// ============ CHECK-IN QR stop ========
 async function stopQRScanner() {
   if (html5QrCode && html5QrCode.isScanning) {
     try {
@@ -537,7 +616,7 @@ async function loadTodayCheckins() {
 }
 
 async function startQRScanner() {
-    // ✅ Si ya está escaneando, no hacer nada
+  // ✅ Si ya está escaneando, no hacer nada
   if (html5QrCode && html5QrCode.isScanning) {
     console.log('📷 Escáner ya está activo');
     return;
@@ -689,7 +768,7 @@ async function loadPayments() {
         <td class="p-5 ${isExpiringSoon(p.expiration_date) ? 'text-yellow-400' : 'text-zinc-400'}">${formatDate(p.expiration_date)}</td>
         <td class="p-5"><span class="px-3 py-1 rounded-full text-xs bg-green-900/50 text-green-300">${p.status}</span></td>
         <td class="p-5 text-center"><button onclick="sendPaymentReceipt(${p.id}, '${escapeHtml(p.members?.name)}', ${p.amount})" class="text-blue-400 hover:text-blue-300"><i class="fas fa-receipt"></i></button></td>
-       </tr>
+      </tr>
     `).join('');
     
     const memberSelect = document.getElementById('paymentMemberId');
@@ -807,38 +886,95 @@ function sendPaymentReceipt(paymentId, memberName, amount) {
   window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
 }
 
-// ============ PERFIL COMPLETO DEL MIEMBRO ============
+// ============ PERFIL COMPLETO DEL MIEMBRO - CORREGIDA ============
 async function showMemberProfile(memberId) {
-  const member = allMembers.find(m => m.id === memberId);
-  if (!member) return;
+  console.log("🔍 showMemberProfile llamado con ID:", memberId);
+  
+  let member = allMembers.find(m => m.id === memberId);
+  
+  // Si no está en allMembers, buscarlo directamente en Supabase
+  if (!member) {
+    console.log("⚠️ Miembro no encontrado en allMembers, buscando en Supabase...");
+    try {
+      const client = window.supabaseClient();
+      if (client) {
+        const { data, error } = await client
+          .from('members')
+          .select('*')
+          .eq('id', parseInt(memberId))
+          .single();
+        
+        if (error) throw error;
+        member = data;
+        console.log("✅ Miembro encontrado en Supabase:", member.name);
+      }
+    } catch (error) {
+      console.error("❌ Error buscando miembro:", error);
+      showToast("Miembro no encontrado", "error");
+      return;
+    }
+  }
+  
+  if (!member) {
+    console.error("❌ Miembro no encontrado con ID:", memberId);
+    showToast("Miembro no encontrado", "error");
+    return;
+  }
   
   currentProfileMember = member;
   
-  document.getElementById('profileName').textContent = member.name;
-  document.getElementById('profileId').textContent = member.id;
-  document.getElementById('profilePlan').textContent = member.plan;
-  
+  // Actualizar UI
+  const nameEl = document.getElementById('profileName');
+  const idEl = document.getElementById('profileId');
+  const planEl = document.getElementById('profilePlan');
   const photoContainer = document.getElementById('profilePhoto');
-  if (member.photo_url) {
-    photoContainer.innerHTML = `<img src="${member.photo_url}" class="w-32 h-32 rounded-full object-cover">`;
-    photoContainer.className = "relative";
-  } else {
-    const firstLetter = (member.name?.charAt(0) || '?').toUpperCase();
-    photoContainer.innerHTML = firstLetter;
-    photoContainer.className = "w-32 h-32 rounded-full bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-5xl font-bold text-white shadow-xl";
+  const statusEl = document.getElementById('profileStatus');
+  const qrContainer = document.getElementById('profileQR');
+  const modal = document.getElementById('memberProfileModal');
+  
+  if (nameEl) nameEl.textContent = member.name || '-';
+  if (idEl) idEl.textContent = member.id;
+  if (planEl) planEl.textContent = member.plan || 'Básico';
+  
+  // Foto
+  if (photoContainer) {
+    if (member.photo_url) {
+      photoContainer.innerHTML = `<img src="${member.photo_url}" class="w-32 h-32 rounded-full object-cover">`;
+      photoContainer.className = "relative";
+    } else {
+      const firstLetter = (member.name?.charAt(0) || '?').toUpperCase();
+      photoContainer.innerHTML = firstLetter;
+      photoContainer.className = "w-32 h-32 rounded-full bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-5xl font-bold text-white shadow-xl";
+    }
   }
   
-  const isActive = new Date(member.membership_end) >= new Date();
-  const statusEl = document.getElementById('profileStatus');
-  statusEl.textContent = isActive ? '✅ Activo' : '❌ Vencido';
-  statusEl.className = isActive ? 'px-3 py-1 rounded-full text-xs font-semibold bg-green-900/50 text-green-300' : 'px-3 py-1 rounded-full text-xs font-semibold bg-red-900/50 text-red-300';
+  // Estado
+  if (statusEl) {
+    const isActive = new Date(member.membership_end) >= new Date();
+    statusEl.textContent = isActive ? '✅ Activo' : '❌ Vencido';
+    statusEl.className = isActive ? 'px-3 py-1 rounded-full text-xs font-semibold bg-green-900/50 text-green-300' : 'px-3 py-1 rounded-full text-xs font-semibold bg-red-900/50 text-red-300';
+  }
   
-  const qrContainer = document.getElementById('profileQR');
-  qrContainer.innerHTML = '';
-  new QRCode(qrContainer, { text: `NEOFIT_${member.id}`, width: 80, height: 80 });
+  // QR
+  if (qrContainer) {
+    qrContainer.innerHTML = '';
+    try {
+      new QRCode(qrContainer, { text: `NEOFIT_${member.id}`, width: 80, height: 80 });
+    } catch(e) {
+      console.warn("Error generando QR:", e);
+    }
+  }
   
+  // Cargar datos adicionales
   await loadMemberExtraData(member.id);
-  document.getElementById('memberProfileModal').classList.remove('hidden');
+  
+  // Abrir modal
+  if (modal) {
+    modal.classList.remove('hidden');
+    console.log("✅ Modal abierto para:", member.name);
+  } else {
+    console.error("❌ Modal #memberProfileModal no encontrado en el DOM");
+  }
 }
 
 async function loadMemberExtraData(memberId) {
@@ -846,8 +982,6 @@ async function loadMemberExtraData(memberId) {
   if (!client) return;
   
   const member = currentProfileMember;
-  
-  const fields = ['infoName', 'infoEmail', 'infoPhone', 'infoBirth', 'infoHeight', 'infoEmergencyContact', 'infoEmergencyPhone', 'infoGoals', 'infoHealthNotes', 'infoCurrentPlan', 'infoExpiry', 'infoDaysLeft', 'infoLastCheckin', 'infoWeight', 'infoBMI', 'infoBodyFat', 'infoMuscle'];
   
   if (document.getElementById('infoName')) document.getElementById('infoName').textContent = member.name || '-';
   if (document.getElementById('infoEmail')) document.getElementById('infoEmail').textContent = member.email || '-';
@@ -1044,7 +1178,11 @@ async function uploadMemberPhoto() {
       const { error: updateError } = await client.from('members').update({ photo_url: photoUrl }).eq('id', currentProfileMember.id);
       if (updateError) throw updateError;
       
-      document.getElementById('profilePhoto').innerHTML = `<img src="${photoUrl}" class="w-32 h-32 rounded-full object-cover">`;
+      const profilePhotoDiv = document.getElementById('profilePhoto');
+profilePhotoDiv.innerHTML = `<img src="${photoUrl}" style="width: 128px; height: 128px; border-radius: 9999px; object-fit: cover;">`;
+profilePhotoDiv.className = "relative";
+profilePhotoDiv.style.width = "128px";
+profilePhotoDiv.style.height = "128px";
       currentProfileMember.photo_url = photoUrl;
       showToast('Foto actualizada correctamente', 'success');
     } catch (error) {
@@ -1140,71 +1278,272 @@ async function checkMemberAuthStatus(memberId, memberEmail) {
 
 async function updateUserAuthUI() {
   if (!currentProfileMember) return;
-  const hasAuth = await checkMemberAuthStatus(currentProfileMember.id, currentProfileMember.email);
+  
+  const client = window.supabaseClient();
+  if (!client) return;
+  
+  // Verificar si existe en la tabla profiles
   let hasProfile = false;
+  let profileData = null;
+  
   if (currentProfileMember.auth_id) {
-    const client = window.supabaseClient();
-    if (client) {
-      const { data: profile } = await client.from('profiles').select('id').eq('id', currentProfileMember.auth_id).single();
-      hasProfile = !!profile;
+    const { data: profile, error: profileError } = await client
+      .from('profiles')
+      .select('id, email, full_name, role')
+      .eq('id', currentProfileMember.auth_id)
+      .maybeSingle();
+    
+    hasProfile = !!profile;
+    profileData = profile;
+    
+    if (profileError) {
+      console.warn('Error verificando perfil:', profileError);
     }
   }
+  
+  // Si no tiene auth_id pero tiene email, verificar si existe en profiles por email
+  if (!hasProfile && currentProfileMember.email) {
+    const { data: profileByEmail } = await client
+      .from('profiles')
+      .select('id')
+      .eq('email', currentProfileMember.email)
+      .maybeSingle();
+    
+    if (profileByEmail) {
+      hasProfile = true;
+      // Actualizar member con el auth_id encontrado
+      await client
+        .from('members')
+        .update({ auth_id: profileByEmail.id })
+        .eq('id', currentProfileMember.id);
+      currentProfileMember.auth_id = profileByEmail.id;
+    }
+  }
+  
   const notCreatedDiv = document.getElementById('userNotCreated');
   const createdDiv = document.getElementById('userCreated');
   const statusDiv = document.getElementById('userAuthStatus');
   const authEmailInput = document.getElementById('userAuthEmail');
+  
   if (authEmailInput) authEmailInput.value = currentProfileMember.email;
-  if (hasAuth || hasProfile) {
+  
+  if (hasProfile) {
     if (notCreatedDiv) notCreatedDiv.classList.add('hidden');
     if (createdDiv) createdDiv.classList.remove('hidden');
     if (statusDiv) {
       statusDiv.style.background = 'rgba(16, 185, 129, 0.1)';
-      document.getElementById('authStatusIcon').className = 'fas fa-check-circle text-green-400 text-2xl';
-      document.getElementById('authStatusText').textContent = '✓ Cuenta Activada';
-      document.getElementById('authStatusDetail').textContent = 'El miembro puede iniciar sesión en la app cliente';
+      const statusIcon = document.getElementById('authStatusIcon');
+      const statusText = document.getElementById('authStatusText');
+      const statusDetail = document.getElementById('authStatusDetail');
+      if (statusIcon) statusIcon.className = 'fas fa-check-circle text-green-400 text-2xl';
+      if (statusText) statusText.textContent = '✓ Cuenta Activada';
+      if (statusDetail) statusDetail.textContent = 'El miembro puede iniciar sesión en la app cliente';
     }
   } else {
     if (notCreatedDiv) notCreatedDiv.classList.remove('hidden');
     if (createdDiv) createdDiv.classList.add('hidden');
     if (statusDiv) {
       statusDiv.style.background = 'rgba(239, 68, 68, 0.1)';
-      document.getElementById('authStatusIcon').className = 'fas fa-exclamation-triangle text-red-400 text-2xl';
-      document.getElementById('authStatusText').textContent = '✗ Cuenta no creada';
-      document.getElementById('authStatusDetail').textContent = 'Debes crear una cuenta de acceso para este miembro';
+      const statusIcon = document.getElementById('authStatusIcon');
+      const statusText = document.getElementById('authStatusText');
+      const statusDetail = document.getElementById('authStatusDetail');
+      if (statusIcon) statusIcon.className = 'fas fa-exclamation-triangle text-red-400 text-2xl';
+      if (statusText) statusText.textContent = '✗ Cuenta no creada';
+      if (statusDetail) statusDetail.textContent = 'Debes crear una cuenta de acceso para este miembro';
     }
   }
 }
 
-async function createUserAuthForMember() {
-  if (!currentProfileMember) { showToast('No hay miembro seleccionado', 'error'); return; }
-  const tempPassword = generateTemporaryPassword();
-  showToast('Creando cuenta de acceso...', 'info');
+async function updateMemberEmail() {
+  if (!currentProfileMember) {
+    showToast('No hay miembro seleccionado', 'error');
+    return;
+  }
+  
+  const newEmail = document.getElementById('userAuthEmail').value.trim();
+  
+  if (!newEmail) {
+    showToast('El email no puede estar vacío', 'error');
+    return;
+  }
+  
+  // Validar formato de email
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(newEmail)) {
+    showToast('Ingresa un email válido', 'error');
+    return;
+  }
+  
+  // Confirmar cambio
+  if (!confirm(`¿Cambiar email de ${currentProfileMember.name} de "${currentProfileMember.email}" a "${newEmail}"?`)) {
+    return;
+  }
+  
   try {
     const client = window.supabaseClient();
     if (!client) throw new Error('Supabase no disponible');
-    const { data, error } = await client.auth.signUp({
-      email: currentProfileMember.email,
-      password: tempPassword,
-      options: { data: { name: currentProfileMember.name, role: 'member', phone: currentProfileMember.phone } }
-    });
-    if (error) {
-      if (error.message.includes('already registered')) { showToast('⚠️ El usuario ya existe', 'warning'); await updateUserAuthUI(); return; }
-      throw error;
+    
+    // Actualizar email en tabla members
+    const { error: updateError } = await client
+      .from('members')
+      .update({ email: newEmail })
+      .eq('id', currentProfileMember.id);
+    
+    if (updateError) throw updateError;
+    
+    // Actualizar en el objeto actual
+    currentProfileMember.email = newEmail;
+    
+    // Actualizar en allMembers
+    const memberIndex = allMembers.findIndex(m => m.id === currentProfileMember.id);
+    if (memberIndex !== -1) {
+      allMembers[memberIndex].email = newEmail;
     }
-    if (data?.user?.id) {
-      const { error: profileError } = await client.from('profiles').insert({ id: data.user.id, email: currentProfileMember.email, full_name: currentProfileMember.name, role: 'member', created_at: new Date().toISOString() });
-      if (profileError) console.error('Error creando perfil:', profileError);
-      await client.from('members').update({ auth_id: data.user.id }).eq('id', currentProfileMember.id);
+    
+    showToast('✅ Email actualizado correctamente', 'success');
+    
+    // Si tiene cuenta de auth, también actualizar allí
+    if (currentProfileMember.auth_id) {
+      // Nota: Para actualizar email en Auth, se necesita privilegios de admin
+      showToast('⚠️ Recuerda actualizar también el email en la cuenta de acceso', 'warning');
     }
-    // Usar la función de members.js si existe
-    if (typeof window.sendWelcomeWithCredentials === 'function') {
-      await window.sendWelcomeWithCredentials(currentProfileMember, tempPassword);
-    } else {
-      showToast('✅ Cuenta creada. Credenciales: ' + tempPassword, 'success');
-    }
-    showToast('✅ Cuenta creada. Credenciales enviadas por WhatsApp', 'success');
+    
     await updateUserAuthUI();
-  } catch (error) { showToast('Error al crear usuario: ' + error.message, 'error'); }
+    
+  } catch (error) {
+    console.error('Error:', error);
+    showToast('Error al actualizar email: ' + error.message, 'error');
+  }
+}
+
+// ============ CREAR CUENTA DE ACCESO PARA MIEMBRO ============
+async function createUserAuthForMember() {
+  if (!currentProfileMember) { 
+    showToast('No hay miembro seleccionado', 'error'); 
+    return; 
+  }
+  
+  if (currentProfileMember.auth_id) {
+    showToast('⚠️ Este miembro ya tiene una cuenta de acceso', 'warning');
+    await updateUserAuthUI();
+    return;
+  }
+  
+  const email = currentProfileMember.email;
+  const name = currentProfileMember.name;
+  const phone = currentProfileMember.phone;
+  
+  showToast(`Verificando disponibilidad del email...`, 'info');
+  
+  try {
+    const client = window.supabaseClient();
+    if (!client) throw new Error('Supabase no disponible');
+    
+    // Verificar si el email ya existe en Auth
+    const { data: existingUser, error: checkError } = await client.auth
+      .signInWithPassword({ email: email, password: 'temp_check_123' })
+      .catch(() => ({ data: null, error: { message: 'not_found' } }));
+    
+    // Si el error NO es "Invalid login credentials", el usuario podría existir
+    if (checkError && !checkError.message?.includes('Invalid login credentials')) {
+      // Podría ser que el usuario ya existe
+      showToast(`❌ El email "${email}" ya está registrado en el sistema.\n\nNo se puede crear una cuenta duplicada.`, 'error');
+      showToast('💡 Solución: Edita el miembro y cambia su email a uno diferente', 'warning');
+      return;
+    }
+    
+    // Generar contraseña temporal
+    const tempPassword = generateTemporaryPassword();
+    console.log('🔑 Contraseña temporal:', tempPassword);
+    
+    showToast('Creando cuenta de acceso...', 'info');
+    
+    // Crear usuario en Auth
+    const { data, error } = await client.auth.signUp({
+      email: email,
+      password: tempPassword,
+      options: { 
+        data: { 
+          name: name, 
+          role: 'member', 
+          phone: phone 
+        }
+      }
+    });
+    
+    if (error) {
+      console.error('❌ Error en signUp:', error);
+      
+      if (error.status === 429) {
+        showToast('⏳ Demasiados intentos. Espera 5-10 minutos y vuelve a intentar.', 'error');
+      } else if (error.message?.includes('already registered')) {
+        showToast('❌ Email ya registrado. Cambia el email del miembro.', 'error');
+      } else {
+        showToast('Error: ' + error.message, 'error');
+      }
+      return;
+    }
+    
+    if (data?.user?.id) {
+      const authId = data.user.id;
+      console.log('✅ Usuario creado en Auth:', authId);
+      
+      // Guardar en tabla profiles
+      const { error: profileError } = await client
+        .from('profiles')
+        .insert({ 
+          id: authId,
+          email: email,
+          full_name: name,
+          role: 'member',
+          created_at: new Date().toISOString()
+        });
+      
+      if (profileError) {
+        console.error('❌ Error creando perfil:', profileError);
+        showToast('Error al crear perfil: ' + profileError.message, 'error');
+        return;
+      }
+      
+      console.log('✅ Perfil creado en profiles');
+      
+      // Actualizar member con auth_id
+      const { error: updateError } = await client
+        .from('members')
+        .update({ auth_id: authId })
+        .eq('id', currentProfileMember.id);
+      
+      if (updateError) {
+        console.error('❌ Error actualizando member:', updateError);
+      } else {
+        console.log('✅ Member actualizado con auth_id');
+      }
+      
+      // Actualizar objeto actual
+      currentProfileMember.auth_id = authId;
+      
+      // Actualizar en allMembers
+      const memberIndex = allMembers.findIndex(m => m.id === currentProfileMember.id);
+      if (memberIndex !== -1) {
+        allMembers[memberIndex].auth_id = authId;
+      }
+      
+      // Enviar credenciales por WhatsApp
+      if (typeof window.sendWelcomeWithCredentials === 'function') {
+        await window.sendWelcomeWithCredentials(currentProfileMember, tempPassword);
+        showToast('✅ Cuenta creada. Credenciales enviadas por WhatsApp', 'success');
+      } else {
+        showToast(`✅ Cuenta creada. Contraseña temporal: ${tempPassword}`, 'success');
+      }
+      
+      // Actualizar UI
+      await updateUserAuthUI();
+    }
+    
+  } catch (error) {
+    console.error('❌ Error en createUserAuthForMember:', error);
+    showToast('Error: ' + error.message, 'error');
+  }
 }
 
 async function sendPasswordResetNotification(memberName, memberEmail, memberPhone) {
@@ -1390,13 +1729,23 @@ document.addEventListener('DOMContentLoaded', () => {
   
   cleanOldCheckins();
   
+  // Actualizar solo check-ins cada 10 segundos (no recargar gráficos cada 5 segundos)
   setInterval(() => {
     const checkinPage = document.getElementById('page-checkin');
-    if (checkinPage && !checkinPage.classList.contains('hidden')) { loadTodayCheckins(); }
-  }, 5000);
+    if (checkinPage && !checkinPage.classList.contains('hidden')) { 
+      loadTodayCheckins(); 
+    }
+  }, 10000);
 });
 
-document.addEventListener('visibilitychange', () => { if (!document.hidden && currentUser) { loadDashboardData(); if (typeof loadMembers === 'function') loadMembers(); loadPayments(); loadTodayCheckins(); } });
+document.addEventListener('visibilitychange', () => { 
+  if (!document.hidden && currentUser) { 
+    loadDashboardData(); 
+    if (typeof loadMembers === 'function') loadMembers(); 
+    loadPayments(); 
+    loadTodayCheckins(); 
+  } 
+});
 
 // ============ EXPONER FUNCIONES GLOBALES ============
 window.logout = logout;
