@@ -1434,8 +1434,7 @@ async function createUserAuthForMember() {
     }
 
     // Caso 2: Existe en Auth pero NO en profiles (estado inconsistente)
-    if (authUser && !profile) {
-      showToast('🔧 Detectado estado inconsistente. Creando perfil...', 'info');
+    if (authUser && !profile) { showToast('🔧 Detectado estado inconsistente. Creando perfil...', 'info');
       
       const { error: profileError } = await client.from('profiles').insert({
         id: authUser.id,
