@@ -221,25 +221,42 @@ async function loadClientCheckins() {
   const client = window.supabaseClient();
   if (!client) return;
   
-  const { data } = await client
-    .from('checkins')
-    .select('*')
-    .eq('member_id', currentClient.id)
-    .order('checkin_time', { ascending: false })
-    .limit(10);
-  
   const container = document.getElementById('clientRecentCheckins');
-  if (!data || data.length === 0) {
-    container.innerHTML = '<div class="text-center text-zinc-500 py-6 bg-white/5 rounded-2xl">✨ Aún no tienes check-ins registrados</div>';
+  if (!container) {
+    console.log('❌ Contenedor clientRecentCheckins no encontrado');
     return;
   }
   
-  container.innerHTML = data.map(c => `
-    <div class="flex justify-between items-center p-3 bg-white/5 rounded-2xl backdrop-blur-sm">
-      <span class="text-sm font-medium"><i class="far fa-calendar-check mr-2 text-sky-400"></i>${formatDateTime(c.checkin_time)}</span>
-      <span class="text-emerald-400 text-xs bg-emerald-500/10 px-3 py-1 rounded-full"><i class="fas fa-check-circle"></i> Registrado</span>
-    </div>
-  `).join('');
+  try {
+    console.log('🔄 Cargando check-ins para cliente:', currentClient.id);
+    
+    const { data, error } = await client
+      .from('checkins')
+      .select('*')
+      .eq('member_id', currentClient.id)
+      .order('checkin_time', { ascending: false })
+      .limit(10);
+    
+    if (error) throw error;
+    
+    console.log(`📊 ${data?.length || 0} check-ins encontrados`);
+    
+    if (!data || data.length === 0) {
+      container.innerHTML = '<div class="text-center text-zinc-500 py-6 bg-white/5 rounded-2xl">✨ Aún no tienes check-ins registrados</div>';
+      return;
+    }
+    
+    container.innerHTML = data.map(c => `
+      <div class="flex justify-between items-center p-3 bg-white/5 rounded-2xl backdrop-blur-sm">
+        <span class="text-sm font-medium"><i class="far fa-calendar-check mr-2 text-sky-400"></i>${formatDateTime(c.checkin_time)}</span>
+        <span class="text-emerald-400 text-xs bg-emerald-500/10 px-3 py-1 rounded-full"><i class="fas fa-check-circle"></i> Registrado</span>
+      </div>
+    `).join('');
+    
+  } catch (error) {
+    console.error('Error loading client checkins:', error);
+    container.innerHTML = '<div class="text-center text-red-400 py-6 bg-red-500/10 rounded-2xl">❌ Error al cargar tus check-ins</div>';
+  }
 }
 
 async function loadClientProgress() {
@@ -406,7 +423,24 @@ async function quickClientCheckin() {
       .eq('id', currentClient.id);
 
     showClientToast('✅ ¡Asistencia registrada correctamente! 💪', 'success');
+    
+    // 🔥 IMPORTANTE: Recargar datos del cliente desde Supabase
+    const { data: updatedMember } = await supabase
+      .from('members')
+      .select('*')
+      .eq('id', currentClient.id)
+      .single();
+    
+    if (updatedMember) {
+      currentClient = updatedMember;
+      localStorage.setItem('neofit_client', JSON.stringify(currentClient));
+    }
+    
+    // 🔥 ACTUALIZAR LISTA DE CHECK-INS (lo más importante)
     await loadClientCheckins();
+    
+    // 🔥 ACTUALIZAR DATOS GENERALES (días restantes, barra, etc.)
+    await loadClientData();
 
   } catch (error) {
     console.error('Error al registrar check-in:', error);
