@@ -405,11 +405,36 @@ async function saveMember(event) {
   }
 }
 
-// ==================== ENVÍO PROFESIONAL DE CREDENCIALES ====================
+// ==================== ENVÍO DE CREDENCIALES POR WHATSAPP (FORMATO 521) ====================
 async function sendWelcomeWithCredentials(member, tempPassword) {
   if (!member?.phone) {
     showToast('⚠️ El miembro no tiene número de teléfono registrado', 'warning');
     return;
+  }
+
+  // ✅ LIMPIAR NÚMERO: solo dígitos
+  const numeroWhatsApp = member.phone.replace(/[^0-9]/g, '');
+  
+  // ✅ VALIDAR que tenga al menos 10 dígitos
+  if (numeroWhatsApp.length < 10) {
+    showToast(`⚠️ Número inválido: ${member.phone}`, 'warning');
+    return;
+  }
+
+  // ✅ FORMATEAR CON 521 (México celular)
+  let numeroFinal;
+  if (numeroWhatsApp.length === 10) {
+    // Ej: 9381083498 → 5219381083498
+    numeroFinal = `521${numeroWhatsApp}`;
+  } else if (numeroWhatsApp.length === 11 && numeroWhatsApp.startsWith('52')) {
+    // Ej: 529381083498 → 5219381083498
+    numeroFinal = `521${numeroWhatsApp.substring(2)}`;
+  } else if (numeroWhatsApp.length === 13 && numeroWhatsApp.startsWith('521')) {
+    // Ej: 5219381083498 → se queda igual
+    numeroFinal = numeroWhatsApp;
+  } else {
+    // Cualquier otro caso, intentar con 521
+    numeroFinal = `521${numeroWhatsApp.slice(-10)}`;
   }
 
   const mensaje = `🎉 *¡BIENVENIDO A NEOFIT, ${member.name.toUpperCase()}!* 🎉
@@ -427,67 +452,21 @@ async function sendWelcomeWithCredentials(member, tempPassword) {
 
 🎫 *Usa tu QR en la entrada del gimnasio*
 
+⚠️ Recomendación: Cambia tu contraseña en tu primer ingreso.
+
 ¡Estamos listos para verte entrenar! 💪
 
 _NeoFit Gym - Tu mejor versión empieza hoy_`;
 
   const mensajeCodificado = encodeURIComponent(mensaje);
-  const cleanPhone = member.phone.replace(/\D/g, '');
-  const numero = cleanPhone.length === 10 ? `52${cleanPhone}` : cleanPhone;
   
-  // Crear modal bonito
-  const modal = document.createElement('div');
-  modal.id = 'modalNeoFitWhatsApp';
-  modal.className = 'fixed inset-0 bg-black/90 flex items-center justify-center z-[10002] p-4';
-  modal.innerHTML = `
-    <div class="bg-zinc-900 rounded-3xl max-w-md w-full p-8 text-center border border-zinc-700">
-      <div class="w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
-        <i class="fab fa-whatsapp text-5xl text-white"></i>
-      </div>
-      
-      <h3 class="text-2xl font-bold text-white mb-2">¡Cuenta Creada!</h3>
-      <p class="text-zinc-400 mb-8">¿Deseas enviar las credenciales por WhatsApp?</p>
-      
-      <div class="space-y-3">
-        <button id="btnEnviarWhatsApp" 
-                class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-4 rounded-2xl transition-all flex items-center justify-center gap-3 text-lg">
-          <i class="fab fa-whatsapp text-2xl"></i>
-          Enviar por WhatsApp
-        </button>
-        
-        <button id="btnCopiarCredenciales" 
-                class="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-4 rounded-2xl transition-all flex items-center justify-center gap-3">
-          <i class="fas fa-copy"></i>
-          Copiar mensaje
-        </button>
-        
-        <button id="btnCerrarModal" 
-                class="w-full text-zinc-400 hover:text-white py-3 text-sm transition-all">
-          Cerrar
-        </button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(modal);
-
-  // Event listeners
-  document.getElementById('btnEnviarWhatsApp').onclick = () => {
-    const url = `https://api.whatsapp.com/send?phone=${numero}&text=${mensajeCodificado}`;
-    window.open(url, '_blank');
-    showToast('📱 Abriendo WhatsApp...', 'success');
-    modal.remove();
-  };
-
-  document.getElementById('btnCopiarCredenciales').onclick = () => {
-    navigator.clipboard.writeText(mensaje);
-    showToast('✅ Mensaje copiado al portapapeles', 'success');
-    modal.remove();
-  };
-
-  document.getElementById('btnCerrarModal').onclick = () => {
-    modal.remove();
-  };
+  // ✅ USAR FORMATO CON 521
+  const whatsappUrl = `https://api.whatsapp.com/send?phone=${numeroFinal}&text=${mensajeCodificado}`;
+  
+  console.log("📱 Abriendo WhatsApp con URL:", whatsappUrl);
+  window.open(whatsappUrl, '_blank');
+  
+  showToast("📱 Abriendo WhatsApp...", 'success');
 }
 
 async function editMember(id) {

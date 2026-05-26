@@ -1117,10 +1117,35 @@ async function loadProfileCheckins(memberId) {
 function closeMemberProfile() { document.getElementById('memberProfileModal').classList.add('hidden'); currentProfileMember = null; }
 
 function showProfileTab(tab) {
+  // 1. Ocultar TODOS los contenidos
   const tabs = ['info', 'payments', 'progress', 'routines', 'checkins', 'user'];
-  tabs.forEach(t => { const tabEl = document.getElementById(`${t}Tab`); if (tabEl) tabEl.classList.add('hidden'); });
+  tabs.forEach(t => { 
+    const tabEl = document.getElementById(`${t}Tab`); 
+    if (tabEl) tabEl.classList.add('hidden'); 
+  });
+  
+  // 2. Mostrar SOLO el contenido seleccionado
   const activeTab = document.getElementById(`${tab}Tab`);
   if (activeTab) activeTab.classList.remove('hidden');
+  
+  // 3. 🔥 CAMBIAR COLOR DE LOS BOTONES 🔥
+  // Lista de todos los botones
+  const botones = ['tabInfo', 'tabPayments', 'tabProgress', 'tabRoutines', 'tabCheckins', 'tabUser'];
+  
+  // Quitar el estilo activo de TODOS los botones
+  botones.forEach(btnId => {
+    const btn = document.getElementById(btnId);
+    if (btn) {
+      btn.className = 'tab-btn px-6 py-3 font-medium text-sm text-zinc-400';
+      btn.style.borderBottom = 'none';
+    }
+  });
+  
+  // Agregar estilo activo SOLO al botón que se clickeó
+  const botonActivo = document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`);
+  if (botonActivo) {
+    botonActivo.className = 'tab-btn px-6 py-3 font-medium text-sm border-b-2 border-sky-500 text-sky-400';
+  }
 }
 
 function quickCheckinFromProfile() {
@@ -1529,16 +1554,26 @@ async function resetUserPassword() {
 }
 
 async function sendCredentialsWhatsApp() {
-  if (!currentProfileMember) return;
+  if (!currentProfileMember) {
+    showToast('No hay miembro seleccionado', 'error');
+    return;
+  }
   
-  // Primero verificar si existe el profile
+  const member = currentProfileMember;
+  
+  if (!member.phone) {
+    showToast('⚠️ Este miembro no tiene número de teléfono registrado', 'warning');
+    return;
+  }
+  
   const client = window.supabaseClient();
   if (!client) return;
   
+  // Verificar si existe el perfil
   const { data: profile } = await client
     .from('profiles')
     .select('id')
-    .eq('email', currentProfileMember.email)
+    .eq('email', member.email)
     .maybeSingle();
   
   if (!profile) {
@@ -1549,23 +1584,30 @@ async function sendCredentialsWhatsApp() {
   const tempPassword = generateTemporaryPassword();
   
   try {
-    // Intentar actualizar contraseña en Auth
-    const { error } = await client.auth.admin.updateUserById(profile.id, { password: tempPassword });
+    const { error } = await client.auth.admin.updateUserById(profile.id, { 
+      password: tempPassword 
+    });
     
-    if (error) { 
-      await resetUserPassword(); 
-      showToast('📧 Se ha enviado un enlace para restablecer contraseña', 'success'); 
-      return; 
-    }
+    if (error) throw error;
     
-    if (typeof window.sendWelcomeWithCredentials === 'function') {
-      await window.sendWelcomeWithCredentials(currentProfileMember, tempPassword);
-    }
+    // ✅ ENVIAR CON FORMATO 521
+    const numeroWhatsApp = member.phone.replace(/[^0-9]/g, '');
+    let numeroFinal = `521${numeroWhatsApp.slice(-10)}`;
     
-    showToast('✅ Credenciales reenviadas por WhatsApp', 'success');
-  } catch (error) { 
-    await resetUserPassword(); 
-    showToast('📧 Se ha enviado un enlace para crear contraseña', 'success'); 
+    const mensaje = `🎉 *NEOFIT - TUS CREDENCIALES* 🎉
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📧 *Email:* ${member.email}
+🔑 *Contraseña:* ${tempPassword}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 Accede: https://neo-fit.vercel.app/login.html`;
+    
+    const whatsappUrl = `https://api.whatsapp.com/send?phone=${numeroFinal}&text=${encodeURIComponent(mensaje)}`;
+    window.open(whatsappUrl, '_blank');
+    
+    showToast('✅ Credenciales enviadas', 'success');
+    
+  } catch (error) {
+    showToast('Error: ' + error.message, 'error');
   }
 }
 
