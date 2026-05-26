@@ -16,6 +16,8 @@ let isLoadingDashboard = false;
 let currentView = 'table';
 let lastChartsLoad = 0;
 let isScannerActive = false;
+let autoRefreshInterval = null;
+let lastCheckinCount = 0;
 const CHARTS_REFRESH_INTERVAL = 30000; // 30 segundos
 
 // ============ AUTH ============
@@ -1776,6 +1778,81 @@ async function initializeAppData() {
   }
 }
 
+// ============ ACTUALIZACIÓN AUTOMÁTICA DE CHECK-INS EN ADMIN ============
+async function checkForNewCheckins() {
+  try {
+    const client = window.supabaseClient();
+    if (!client) return;
+    
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Obtener cantidad actual de check-ins hoy
+    const { count: currentCount, data: currentData } = await client
+      .from('checkins')
+      .select('*', { count: 'exact' })
+      .gte('checkin_time', `${today} 00:00:00`)
+      .lte('checkin_time', `${today} 23:59:59`);
+    
+    // Si hay nuevos check-ins
+    if (currentCount !== lastCheckinCount && lastCheckinCount !== 0) {
+      console.log(`🔄 Nuevos check-ins detectados! Antes: ${lastCheckinCount}, Ahora: ${currentCount}`);
+      
+      // Actualizar la interfaz
+      await loadTodayCheckins();
+      await loadDashboardData();
+      
+      // Mostrar notificación sutil
+      if (currentCount > lastCheckinCount) {
+        const nuevos = currentCount - lastCheckinCount;
+        showToast(`📢 ${nuevos} nuevo${nuevos > 1 ? 's' : ''} check-in${nuevos > 1 ? 's' : ''} registrado${nuevos > 1 ? 's' : ''}`, 'info');
+      }
+    }
+    
+    lastCheckinCount = currentCount || 0;
+    
+  } catch (error) {
+    console.error('Error checking for new checkins:', error);
+  }
+}
+
+function startAutoRefreshCheckins() {
+  if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+  
+  // Inicializar contador
+  (async () => {
+    const client = window.supabaseClient();
+    if (client) {
+      const today = new Date().toISOString().split('T')[0];
+      const { count } = await client
+        .from('checkins')
+        .select('*', { count: 'exact' })
+        .gte('checkin_time', `${today} 00:00:00`)
+        .lte('checkin_time', `${today} 23:59:59`);
+      lastCheckinCount = count || 0;
+    }
+  })();
+  
+  // Revisar cada 8 segundos (menos de 10)
+  autoRefreshInterval = setInterval(() => {
+    // Solo actualizar si estamos en dashboard o checkin-list
+    const dashboardPage = document.getElementById('page-dashboard');
+    const checkinPage = document.getElementById('page-checkin-list');
+    const isVisible = (dashboardPage && !dashboardPage.classList.contains('hidden')) ||
+                      (checkinPage && !checkinPage.classList.contains('hidden'));
+    
+    if (isVisible) {
+      checkForNewCheckins();
+    }
+  }, 8000); // 8 segundos
+}
+
+function stopAutoRefreshCheckins() {
+  if (autoRefreshInterval) {
+    clearInterval(autoRefreshInterval);
+    autoRefreshInterval = null;
+  }
+}
+
 // ====================== LIMPIEZA AUTOMÁTICA DE CHECK-INS ======================
 async function cleanOldCheckins() {
   try {
@@ -1848,23 +1925,18 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('offline', () => showToast('⚠️ Sin conexión a internet', 'error'));
   
   cleanOldCheckins();
+  startAutoRefreshCheckins();
   
-  // Actualizar solo check-ins cada 10 segundos (no recargar gráficos cada 5 segundos)
-  setInterval(() => {
-    const checkinPage = document.getElementById('page-checkin');
-    if (checkinPage && !checkinPage.classList.contains('hidden')) { 
-      loadTodayCheckins(); 
-    }
-  }, 10000);
-});
-
-document.addEventListener('visibilitychange', () => { 
-  if (!document.hidden && currentUser) { 
-    loadDashboardData(); 
-    if (typeof loadMembers === 'function') loadMembers(); 
-    loadPayments(); 
-    loadTodayCheckins(); 
-  } 
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    stopAutoRefreshCheckins();
+  } else {
+    startAutoRefreshCheckins();
+    // Actualizar inmediatamente al volver
+    loadTodayCheckins();
+    loadDashboardData();
+  }
+  });
 });
 
 // ============ EXPONER FUNCIONES GLOBALES ============
@@ -1907,3 +1979,5 @@ window.sendWelcomeWithQR = sendWelcomeWithQR;
 window.toggleMobileMenu = toggleMobileMenu;
 window.quickCheckin = quickCheckin;
 window.stopQRScanner = stopQRScanner;
+window.startAutoRefreshCheckins = startAutoRefreshCheckins;
+window.stopAutoRefreshCheckins = stopAutoRefreshCheckins;
