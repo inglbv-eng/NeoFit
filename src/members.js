@@ -427,8 +427,6 @@ async function sendWelcomeWithCredentials(member, tempPassword) {
 
 🎫 *Usa tu QR en la entrada del gimnasio*
 
-⚠️ Recomendación: Cambia tu contraseña en tu primer ingreso.
-
 ¡Estamos listos para verte entrenar! 💪
 
 _NeoFit Gym - Tu mejor versión empieza hoy_`;
@@ -436,7 +434,7 @@ _NeoFit Gym - Tu mejor versión empieza hoy_`;
   const mensajeCodificado = encodeURIComponent(mensaje);
   const cleanPhone = member.phone.replace(/\D/g, '');
   const numero = cleanPhone.length === 10 ? `52${cleanPhone}` : cleanPhone;
-
+  
   // Crear modal bonito
   const modal = document.createElement('div');
   modal.id = 'modalNeoFitWhatsApp';
@@ -451,19 +449,19 @@ _NeoFit Gym - Tu mejor versión empieza hoy_`;
       <p class="text-zinc-400 mb-8">¿Deseas enviar las credenciales por WhatsApp?</p>
       
       <div class="space-y-3">
-        <button id="btnEnviarNeoWhatsApp" 
+        <button id="btnEnviarWhatsApp" 
                 class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-4 rounded-2xl transition-all flex items-center justify-center gap-3 text-lg">
           <i class="fab fa-whatsapp text-2xl"></i>
           Enviar por WhatsApp
         </button>
         
-        <button id="btnCopiarNeoCredenciales" 
+        <button id="btnCopiarCredenciales" 
                 class="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-4 rounded-2xl transition-all flex items-center justify-center gap-3">
           <i class="fas fa-copy"></i>
           Copiar mensaje
         </button>
         
-        <button id="btnCerrarNeoModal" 
+        <button id="btnCerrarModal" 
                 class="w-full text-zinc-400 hover:text-white py-3 text-sm transition-all">
           Cerrar
         </button>
@@ -473,21 +471,21 @@ _NeoFit Gym - Tu mejor versión empieza hoy_`;
 
   document.body.appendChild(modal);
 
-  // Eventos
-  document.getElementById('btnEnviarNeoWhatsApp').onclick = () => {
-    const url = `https://wa.me/${numero}?text=${mensajeCodificado}`;
+  // Event listeners
+  document.getElementById('btnEnviarWhatsApp').onclick = () => {
+    const url = `https://api.whatsapp.com/send?phone=${numero}&text=${mensajeCodificado}`;
     window.open(url, '_blank');
     showToast('📱 Abriendo WhatsApp...', 'success');
     modal.remove();
   };
 
-  document.getElementById('btnCopiarNeoCredenciales').onclick = () => {
+  document.getElementById('btnCopiarCredenciales').onclick = () => {
     navigator.clipboard.writeText(mensaje);
     showToast('✅ Mensaje copiado al portapapeles', 'success');
     modal.remove();
   };
 
-  document.getElementById('btnCerrarNeoModal').onclick = () => {
+  document.getElementById('btnCerrarModal').onclick = () => {
     modal.remove();
   };
 }
