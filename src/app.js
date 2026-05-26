@@ -1553,6 +1553,18 @@ async function resetUserPassword() {
   } catch (error) { showToast('Error al enviar recuperación: ' + error.message, 'error'); }
 }
 
+// ============ FUNCIÓN AUXILIAR PARA ABRIR WHATSAPP SIN BLOQUEOS ============
+function abrirWhatsAppSeguro(url) {
+  const link = document.createElement('a');
+  link.href = url;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => document.body.removeChild(link), 100);
+}
+
+// ============ ENVIAR CREDENCIALES POR WHATSAPP DESDE PERFIL ============
 async function sendCredentialsWhatsApp() {
   if (!currentProfileMember) {
     showToast('No hay miembro seleccionado', 'error');
@@ -1590,7 +1602,7 @@ async function sendCredentialsWhatsApp() {
     
     if (error) throw error;
     
-    // ✅ ENVIAR CON FORMATO 521
+    // Formatear número con 521
     const numeroWhatsApp = member.phone.replace(/[^0-9]/g, '');
     let numeroFinal = `521${numeroWhatsApp.slice(-10)}`;
     
@@ -1601,12 +1613,16 @@ async function sendCredentialsWhatsApp() {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚀 Accede: https://neo-fit.vercel.app/login.html`;
     
-    const whatsappUrl = `https://api.whatsapp.com/send?phone=${numeroFinal}&text=${encodeURIComponent(mensaje)}`;
-    window.open(whatsappUrl, '_blank');
+    const mensajeCodificado = encodeURIComponent(mensaje);
+    const whatsappUrl = `https://api.whatsapp.com/send?phone=${numeroFinal}&text=${mensajeCodificado}`;
     
-    showToast('✅ Credenciales enviadas', 'success');
+    // ✅ USAR LA FUNCIÓN SEGURA EN LUGAR DE window.open
+    abrirWhatsAppSeguro(whatsappUrl);
+    
+    showToast('✅ Credenciales enviadas por WhatsApp', 'success');
     
   } catch (error) {
+    console.error('Error:', error);
     showToast('Error: ' + error.message, 'error');
   }
 }
