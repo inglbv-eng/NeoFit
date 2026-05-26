@@ -271,9 +271,9 @@ async function saveMember(event) {
   event.preventDefault();
   
   const memberId = document.getElementById('memberId')?.value;
-  const name = document.getElementById('name')?.value;
-  const email = document.getElementById('email')?.value;
-  const phone = document.getElementById('phone')?.value;
+  const name = document.getElementById('name')?.value.trim();
+  const email = document.getElementById('email')?.value.trim();
+  const phone = document.getElementById('phone')?.value.trim();
   const plan = document.getElementById('plan')?.value;
   const birthDate = document.getElementById('birthDate')?.value;
   const height = document.getElementById('height')?.value;
@@ -281,37 +281,34 @@ async function saveMember(event) {
   const emergencyPhone = document.getElementById('emergencyPhone')?.value;
   const healthNotes = document.getElementById('healthNotes')?.value;
   const goals = document.getElementById('goals')?.value;
-  
+
   if (!name || !email || !phone) {
     showToast('Por favor completa todos los campos requeridos', 'error');
     return;
   }
-  
+
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
     showToast('Por favor ingresa un email válido', 'error');
     return;
   }
-  
+
   const phoneDigits = phone.replace(/\D/g, '');
   if (phoneDigits.length < 10) {
     showToast('Por favor ingresa un número de teléfono válido (mínimo 10 dígitos)', 'error');
     return;
   }
-  
+
   try {
     const client = window.supabaseClient();
     if (!client) throw new Error('Supabase no disponible');
-    
+
     let result;
-    
+
     if (memberId) {
       // ========== ACTUALIZAR MIEMBRO EXISTENTE ==========
       const updateData = {
-        name: name,
-        email: email,
-        phone: phone,
-        plan: plan,
+        name, email, phone, plan,
         birth_date: birthDate || null,
         height: height ? parseFloat(height) : null,
         emergency_contact: emergencyContact || null,
@@ -320,51 +317,43 @@ async function saveMember(event) {
         goals: goals || null,
         updated_at: new Date().toISOString()
       };
-      
+
       result = await client
         .from('members')
         .update(updateData)
         .eq('id', parseInt(memberId))
         .select();
-        
+
       if (result.error) throw result.error;
-      
-      // ✅ CORREGIDO: Buscar profile por EMAIL, no por auth_id
+
+      // Actualizar también en profiles
       const { data: profile } = await client
         .from('profiles')
         .select('id')
         .eq('email', email)
         .maybeSingle();
-      
+
       if (profile) {
-        await client
-          .from('profiles')
-          .update({
-            email: email,
-            full_name: name,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', profile.id);
-        console.log('✅ Perfil actualizado en profiles');
+        await client.from('profiles').update({
+          email, full_name: name, updated_at: new Date().toISOString()
+        }).eq('id', profile.id);
       }
-      
+
       showToast('Miembro actualizado correctamente', 'success');
-      
+
     } else {
       // ========== CREAR NUEVO MIEMBRO ==========
-      
-      // Verificar si ya existe un miembro con este email
       const { data: existingMember } = await client
         .from('members')
         .select('id')
         .eq('email', email)
         .maybeSingle();
-      
+
       if (existingMember) {
         showToast('Ya existe un miembro con este email', 'error');
         return;
       }
-      
+
       // Calcular fecha de expiración
       const expirationDate = new Date();
       if (plan === 'Anual') {
@@ -372,13 +361,9 @@ async function saveMember(event) {
       } else {
         expirationDate.setMonth(expirationDate.getMonth() + 1);
       }
-      
-      // Crear el miembro PRIMERO (sin cuenta de acceso aún)
+
       const memberData = {
-        name: name,
-        email: email,
-        phone: phone,
-        plan: plan,
+        name, email, phone, plan,
         status: 'active',
         membership_end: expirationDate.toISOString().split('T')[0],
         created_at: new Date().toISOString(),
@@ -388,85 +373,32 @@ async function saveMember(event) {
         emergency_phone: emergencyPhone || null,
         health_notes: healthNotes || null,
         goals: goals || null
-        // ⚠️ NO incluir auth_id - no existe en tu tabla
       };
-      
-      result = await client
-        .from('members')
-        .insert([memberData])
-        .select();
-      
+
+      result = await client.from('members').insert([memberData]).select();
+
       if (result.error) throw result.error;
-      
-      if (result.data && result.data[0]) {
-        const newMember = result.data[0];
-        showToast(`✅ ${newMember.name} registrado correctamente`, 'success');
-        
-        // Preguntar si desea crear cuenta de acceso
-        const wantAuth = confirm(`¿Deseas crear una cuenta de acceso para ${newMember.name}?\n\nEsto le permitirá iniciar sesión en la app cliente.\n\nSe usará el correo: ${newMember.email}`);
-        
-        if (wantAuth) {
-          // Crear usuario en Auth
-          const tempPassword = generateTemporaryPassword();
-          
-          const { data: authUser, error: authError } = await client.auth.signUp({
-            email: email,
-            password: tempPassword,
-            options: {
-              data: {
-                name: name,
-                role: 'member',
-                phone: phone
-              }
-            }
-          });
-          
-          if (authError) {
-            if (authError.message.includes('already registered')) {
-              showToast('⚠️ El email ya está registrado. No se pudo crear cuenta de acceso.', 'warning');
-            } else {
-              showToast('Error al crear cuenta: ' + authError.message, 'error');
-            }
-          } else if (authUser?.user?.id) {
-            // Crear perfil en profiles
-            const { error: profileError } = await client
-              .from('profiles')
-              .insert({
-                id: authUser.user.id,
-                email: email,
-                full_name: name,
-                role: 'member',
-                created_at: new Date().toISOString()
-              });
-            
-            if (profileError) {
-              console.error('Error creando perfil:', profileError);
-              showToast('Error al crear perfil', 'error');
-            } else {
-              console.log('✅ Perfil creado en profiles');
-              await sendWelcomeWithCredentials(newMember, tempPassword);
-              showToast('✅ Cuenta de acceso creada. Credenciales enviadas por WhatsApp', 'success');
-            }
-          }
-        }
+
+      const newMember = result.data[0];
+
+      showToast(`✅ ${newMember.name} registrado correctamente`, 'success');
+
+      // === Crear cuenta de acceso (Nueva forma recomendada) ===
+      const wantAuth = confirm(`¿Deseas crear una cuenta de acceso para ${newMember.name}?\n\nPodrá iniciar sesión en la app cliente.`);
+
+      if (wantAuth) {
+        await createUserAuthForMemberDirect(newMember);  // ← Nueva función
       }
     }
-    
-    // Cerrar modal y recargar datos
-    const memberModal = document.getElementById('memberModal');
-    if (memberModal) memberModal.classList.add('hidden');
-    
+
+    // Cerrar modal y recargar
+    document.getElementById('memberModal')?.classList.add('hidden');
     await loadMembers();
-    if (typeof loadDashboardData === 'function') {
-      await loadDashboardData();
-    }
-    
-    const memberForm = document.getElementById('memberForm');
-    if (memberForm) memberForm.reset();
-    
-    const memberIdField = document.getElementById('memberId');
-    if (memberIdField) memberIdField.value = '';
-    
+    if (typeof loadDashboardData === 'function') await loadDashboardData();
+
+    document.getElementById('memberForm')?.reset();
+    document.getElementById('memberId').value = '';
+
   } catch (error) {
     console.error('Error:', error);
     showToast('Error al guardar miembro: ' + error.message, 'error');
@@ -616,6 +548,65 @@ function showAddMemberModal() {
   if (memberModal) memberModal.classList.remove('hidden');
 }
 
+// ==================== CREAR USUARIO CON ADMIN API ====================
+async function createUserAuthForMemberDirect(member) {
+  if (!member?.email) {
+    showToast('No se encontró email del miembro', 'error');
+    return;
+  }
+
+  const client = window.supabaseClient();
+  if (!client) {
+    showToast('Supabase no disponible', 'error');
+    return;
+  }
+
+  const tempPassword = generateTemporaryPassword();
+
+  try {
+    showToast('Creando cuenta de acceso...', 'info');
+
+    const { data, error } = await client.auth.admin.createUser({
+      email: member.email,
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: {
+        name: member.name,
+        role: 'member',
+        phone: member.phone || ''
+      }
+    });
+
+    if (error) throw error;
+
+    // Crear perfil en tabla profiles
+    const { error: profileError } = await client.from('profiles').insert({
+      id: data.user.id,
+      email: member.email,
+      full_name: member.name,
+      role: 'member',
+      created_at: new Date().toISOString()
+    });
+
+    if (profileError) {
+      console.warn('Perfil ya existía o error menor:', profileError.message);
+    }
+
+    // Enviar credenciales
+    await sendWelcomeWithCredentials(member, tempPassword);
+
+    showToast('✅ Cuenta de acceso creada y credenciales enviadas por WhatsApp', 'success');
+
+  } catch (error) {
+    console.error('Error creando usuario:', error);
+    if (error.message?.includes('429')) {
+      showToast('⏳ Demasiados intentos. Espera 5-10 minutos antes de volver a intentar.', 'error');
+    } else {
+      showToast('Error al crear cuenta: ' + error.message, 'error');
+    }
+  }
+}
+
 function closeModal() { 
   const memberModal = document.getElementById('memberModal');
   if (memberModal) memberModal.classList.add('hidden');
@@ -644,3 +635,4 @@ window.closeModal = closeModal;
 window.sendWelcomeWithCredentials = sendWelcomeWithCredentials;
 window.renderMembersTable = renderMembersTable;
 window.loadSavedView = loadSavedView;
+window.createUserAuthForMemberDirect = createUserAuthForMemberDirect;

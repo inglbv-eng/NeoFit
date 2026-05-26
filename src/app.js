@@ -1404,9 +1404,12 @@ async function createUserAuthForMember() {
   const phone = currentProfileMember.phone;
   
   const client = window.supabaseClient();
-  if (!client) throw new Error('Supabase no disponible');
+  if (!client) {
+    showToast('Supabase no disponible', 'error');
+    return;
+  }
   
-  // Verificar si ya existe un profile con este email
+  // Verificar si ya existe un profile
   const { data: existingProfile } = await client
     .from('profiles')
     .select('id')
@@ -1424,32 +1427,32 @@ async function createUserAuthForMember() {
   try {
     const tempPassword = generateTemporaryPassword();
     
-    // Crear usuario en Auth
-    const { data, error } = await client.auth.signUp({
+    // ✅ USANDO ADMIN API (mejor método)
+    const { data, error } = await client.auth.admin.createUser({
       email: email,
       password: tempPassword,
-      options: { 
-        data: { 
-          name: name, 
-          role: 'member', 
-          phone: phone 
-        }
+      email_confirm: true,           // Confirma el email automáticamente
+      user_metadata: { 
+        name: name, 
+        role: 'member', 
+        phone: phone 
       }
     });
     
     if (error) {
-      if (error.status === 429) {
-        showToast('⏳ Demasiados intentos. Espera 5-10 minutos.', 'error');
-      } else if (error.message?.includes('already registered')) {
-        showToast('❌ Email ya registrado. Usa otro email.', 'error');
+      console.error('Error auth.admin.createUser:', error);
+      if (error.message?.includes('429') || error.status === 429) {
+        showToast('⏳ Demasiados intentos. Espera unos minutos.', 'error');
+      } else if (error.message?.includes('already registered') || error.message?.includes('already exists')) {
+        showToast('❌ Este email ya está registrado.', 'error');
       } else {
-        showToast('Error: ' + error.message, 'error');
+        showToast('Error al crear cuenta: ' + error.message, 'error');
       }
       return;
     }
     
     if (data?.user?.id) {
-      // Guardar en profiles
+      // Guardar en tabla profiles
       const { error: profileError } = await client
         .from('profiles')
         .insert({ 
@@ -1461,20 +1464,21 @@ async function createUserAuthForMember() {
         });
       
       if (profileError) {
-        showToast('Error al crear perfil: ' + profileError.message, 'error');
-        return;
+        console.error('Error creando profile:', profileError);
+        showToast('Cuenta creada pero hubo problema con el perfil', 'warning');
       }
       
-      // Enviar credenciales
+      // Enviar credenciales por WhatsApp
       if (typeof window.sendWelcomeWithCredentials === 'function') {
         await window.sendWelcomeWithCredentials(currentProfileMember, tempPassword);
       }
       
-      showToast('✅ Cuenta creada. Credenciales enviadas por WhatsApp', 'success');
+      showToast('✅ Cuenta de acceso creada exitosamente', 'success');
       await updateUserAuthUI();
     }
     
   } catch (error) {
+    console.error('Error en createUserAuthForMember:', error);
     showToast('Error: ' + error.message, 'error');
   }
 }
