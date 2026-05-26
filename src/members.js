@@ -405,40 +405,91 @@ async function saveMember(event) {
   }
 }
 
+// ==================== ENVÍO PROFESIONAL DE CREDENCIALES ====================
 async function sendWelcomeWithCredentials(member, tempPassword) {
-  if (!member.phone) {
-    console.warn('No hay teléfono para enviar credenciales');
-    showToast('⚠️ No se pudo enviar credenciales - miembro sin teléfono', 'warning');
+  if (!member?.phone) {
+    showToast('⚠️ El miembro no tiene número de teléfono registrado', 'warning');
     return;
   }
-  
-  const message = `🎉 *¡BIENVENIDO A NEOFIT, ${member.name}!* 🎉
+
+  const mensaje = `🎉 *¡BIENVENIDO A NEOFIT, ${member.name.toUpperCase()}!* 🎉
 
 ✅ Tu cuenta ha sido creada exitosamente.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📱 *TUS CREDENCIALES DE ACCESO:*
+📱 *CREDENCIALES DE ACCESO*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📧 *Usuario:* ${member.email}
+📧 *Email:* ${member.email}
 🔑 *Contraseña:* ${tempPassword}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📲 *ACCEDE AQUÍ:* ${window.location.origin}/login.html
+🚀 *Accede aquí:* https://neo-fit.vercel.app/login.html
 
-🎫 *USA TU QR EN LA ENTRADA DEL GIMNASIO*
+🎫 *Usa tu QR en la entrada del gimnasio*
 
-⚠️ *RECOMENDACIÓN:* Cambia tu contraseña en tu primer acceso.
+⚠️ Recomendación: Cambia tu contraseña en tu primer ingreso.
 
-¡Te esperamos para entrenar! 💪
+¡Estamos listos para verte entrenar! 💪
 
-_NeoFit Gym_`;
+_NeoFit Gym - Tu mejor versión empieza hoy_`;
 
-  let cleanPhone = member.phone.replace(/\s/g, '').replace(/[-()]/g, '');
-  if (!cleanPhone.startsWith('+')) {
-    cleanPhone = cleanPhone.startsWith('52') ? `+${cleanPhone}` : `+52${cleanPhone}`;
-  }
-  
-  window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+  const mensajeCodificado = encodeURIComponent(mensaje);
+  const cleanPhone = member.phone.replace(/\D/g, '');
+  const numero = cleanPhone.length === 10 ? `52${cleanPhone}` : cleanPhone;
+
+  // Crear modal bonito
+  const modal = document.createElement('div');
+  modal.id = 'modalNeoFitWhatsApp';
+  modal.className = 'fixed inset-0 bg-black/90 flex items-center justify-center z-[10002] p-4';
+  modal.innerHTML = `
+    <div class="bg-zinc-900 rounded-3xl max-w-md w-full p-8 text-center border border-zinc-700">
+      <div class="w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+        <i class="fab fa-whatsapp text-5xl text-white"></i>
+      </div>
+      
+      <h3 class="text-2xl font-bold text-white mb-2">¡Cuenta Creada!</h3>
+      <p class="text-zinc-400 mb-8">¿Deseas enviar las credenciales por WhatsApp?</p>
+      
+      <div class="space-y-3">
+        <button id="btnEnviarNeoWhatsApp" 
+                class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-4 rounded-2xl transition-all flex items-center justify-center gap-3 text-lg">
+          <i class="fab fa-whatsapp text-2xl"></i>
+          Enviar por WhatsApp
+        </button>
+        
+        <button id="btnCopiarNeoCredenciales" 
+                class="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-4 rounded-2xl transition-all flex items-center justify-center gap-3">
+          <i class="fas fa-copy"></i>
+          Copiar mensaje
+        </button>
+        
+        <button id="btnCerrarNeoModal" 
+                class="w-full text-zinc-400 hover:text-white py-3 text-sm transition-all">
+          Cerrar
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Eventos
+  document.getElementById('btnEnviarNeoWhatsApp').onclick = () => {
+    const url = `https://wa.me/${numero}?text=${mensajeCodificado}`;
+    window.open(url, '_blank');
+    showToast('📱 Abriendo WhatsApp...', 'success');
+    modal.remove();
+  };
+
+  document.getElementById('btnCopiarNeoCredenciales').onclick = () => {
+    navigator.clipboard.writeText(mensaje);
+    showToast('✅ Mensaje copiado al portapapeles', 'success');
+    modal.remove();
+  };
+
+  document.getElementById('btnCerrarNeoModal').onclick = () => {
+    modal.remove();
+  };
 }
 
 async function editMember(id) {
@@ -548,7 +599,7 @@ function showAddMemberModal() {
   if (memberModal) memberModal.classList.remove('hidden');
 }
 
-// ==================== CREAR USUARIO CON ADMIN API ====================
+// ==================== CREAR USUARIO CON ADMIN API (ANTI-INCONSISTENCIA) ====================
 async function createUserAuthForMemberDirect(member) {
   if (!member?.email) {
     showToast('No se encontró email del miembro', 'error');
@@ -556,15 +607,65 @@ async function createUserAuthForMemberDirect(member) {
   }
 
   const client = window.supabaseClient();
-  if (!client) {
-    showToast('Supabase no disponible', 'error');
-    return;
-  }
-
-  const tempPassword = generateTemporaryPassword();
+  if (!client) return;
 
   try {
+    showToast('Analizando estado de la cuenta...', 'info');
+
+    // 1. Verificar si existe en tabla profiles
+    const { data: profile } = await client
+      .from('profiles')
+      .select('id')
+      .eq('email', member.email)
+      .maybeSingle();
+
+    // 2. Verificar si existe en Auth
+    let authUser = null;
+    try {
+      const { data: usersData } = await client.auth.admin.listUsers();
+      authUser = usersData?.users?.find(u => u.email?.toLowerCase() === member.email.toLowerCase());
+    } catch (e) {
+      console.warn("No se pudo listar usuarios:", e);
+    }
+
+    // Caso 1: Ya existe todo correctamente
+    if (profile && authUser) {
+      showToast('✅ Este miembro ya tiene cuenta de acceso', 'success');
+      if (typeof updateUserAuthUI === 'function') await updateUserAuthUI();
+      return;
+    }
+
+    // Caso 2: Existe en Auth pero NO en profiles (estado inconsistente)
+    if (authUser && !profile) {
+      showToast('🔧 Detectado estado inconsistente. Creando perfil...', 'info');
+      
+      const { error: profileError } = await client.from('profiles').insert({
+        id: authUser.id,
+        email: member.email,
+        full_name: member.name,
+        role: 'member',
+        created_at: new Date().toISOString()
+      });
+
+      if (profileError) {
+        showToast('Error al crear perfil: ' + profileError.message, 'error');
+        return;
+      }
+
+      showToast('✅ Perfil creado correctamente', 'success');
+      if (typeof updateUserAuthUI === 'function') await updateUserAuthUI();
+      
+      // Preguntar si quiere reenviar credenciales
+      if (confirm('¿Deseas reenviar las credenciales por WhatsApp?')) {
+        await sendCredentialsWhatsApp();
+      }
+      return;
+    }
+
+    // Caso 3: No existe en ningún lado → Crear todo
     showToast('Creando cuenta de acceso...', 'info');
+
+    const tempPassword = generateTemporaryPassword();
 
     const { data, error } = await client.auth.admin.createUser({
       email: member.email,
@@ -579,8 +680,8 @@ async function createUserAuthForMemberDirect(member) {
 
     if (error) throw error;
 
-    // Crear perfil en tabla profiles
-    const { error: profileError } = await client.from('profiles').insert({
+    // Crear perfil
+    await client.from('profiles').insert({
       id: data.user.id,
       email: member.email,
       full_name: member.name,
@@ -588,21 +689,20 @@ async function createUserAuthForMemberDirect(member) {
       created_at: new Date().toISOString()
     });
 
-    if (profileError) {
-      console.warn('Perfil ya existía o error menor:', profileError.message);
-    }
-
     // Enviar credenciales
     await sendWelcomeWithCredentials(member, tempPassword);
 
-    showToast('✅ Cuenta de acceso creada y credenciales enviadas por WhatsApp', 'success');
+    showToast('✅ Cuenta creada y credenciales enviadas', 'success');
+    if (typeof updateUserAuthUI === 'function') await updateUserAuthUI();
 
   } catch (error) {
-    console.error('Error creando usuario:', error);
-    if (error.message?.includes('429')) {
-      showToast('⏳ Demasiados intentos. Espera 5-10 minutos antes de volver a intentar.', 'error');
+    console.error('Error:', error);
+    if (error.message?.includes('already registered') || error.message?.includes('already exists')) {
+      showToast('El email ya está registrado. Se intentará arreglar el perfil.', 'warning');
+      // Intentar arreglar automáticamente
+      await createUserAuthForMemberDirect(member); // reintento inteligente
     } else {
-      showToast('Error al crear cuenta: ' + error.message, 'error');
+      showToast('Error: ' + error.message, 'error');
     }
   }
 }

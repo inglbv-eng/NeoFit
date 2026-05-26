@@ -1399,87 +1399,113 @@ async function createUserAuthForMember() {
     return; 
   }
   
-  const email = currentProfileMember.email;
-  const name = currentProfileMember.name;
-  const phone = currentProfileMember.phone;
+  const member = currentProfileMember;
   
   const client = window.supabaseClient();
   if (!client) {
     showToast('Supabase no disponible', 'error');
     return;
   }
-  
-  // Verificar si ya existe un profile
-  const { data: existingProfile } = await client
-    .from('profiles')
-    .select('id')
-    .eq('email', email)
-    .maybeSingle();
-  
-  if (existingProfile) {
-    showToast('⚠️ Este email ya tiene una cuenta de acceso', 'warning');
-    await updateUserAuthUI();
-    return;
-  }
-  
-  showToast(`Creando cuenta para: ${email}...`, 'info');
-  
+
   try {
-    const tempPassword = generateTemporaryPassword();
-    
-    // ✅ USANDO ADMIN API (mejor método)
-    const { data, error } = await client.auth.admin.createUser({
-      email: email,
-      password: tempPassword,
-      email_confirm: true,           // Confirma el email automáticamente
-      user_metadata: { 
-        name: name, 
-        role: 'member', 
-        phone: phone 
+    showToast('Analizando estado de la cuenta...', 'info');
+
+    // 1. Verificar si ya existe en profiles
+    const { data: profile } = await client
+      .from('profiles')
+      .select('id')
+      .eq('email', member.email)
+      .maybeSingle();
+
+    // 2. Verificar si existe en Auth
+    let authUser = null;
+    try {
+      const { data: usersData } = await client.auth.admin.listUsers();
+      authUser = usersData?.users?.find(u => u.email?.toLowerCase() === member.email.toLowerCase());
+    } catch (e) {
+      console.warn("No se pudo listar usuarios:", e);
+    }
+
+    // Caso 1: Ya existe todo correctamente
+    if (profile && authUser) {
+      showToast('✅ Este miembro ya tiene cuenta de acceso', 'success');
+      await updateUserAuthUI();
+      return;
+    }
+
+    // Caso 2: Existe en Auth pero NO en profiles (estado inconsistente)
+    if (authUser && !profile) {
+      showToast('🔧 Detectado estado inconsistente. Creando perfil...', 'info');
+      
+      const { error: profileError } = await client.from('profiles').insert({
+        id: authUser.id,
+        email: member.email,
+        full_name: member.name,
+        role: 'member',
+        created_at: new Date().toISOString()
+      });
+
+      if (profileError) {
+        showToast('Error al crear perfil: ' + profileError.message, 'error');
+        return;
       }
-    });
-    
-    if (error) {
-      console.error('Error auth.admin.createUser:', error);
-      if (error.message?.includes('429') || error.status === 429) {
-        showToast('⏳ Demasiados intentos. Espera unos minutos.', 'error');
-      } else if (error.message?.includes('already registered') || error.message?.includes('already exists')) {
-        showToast('❌ Este email ya está registrado.', 'error');
-      } else {
-        showToast('Error al crear cuenta: ' + error.message, 'error');
+
+      showToast('✅ Perfil creado correctamente', 'success');
+      await updateUserAuthUI();
+      
+      if (confirm('¿Deseas reenviar las credenciales por WhatsApp?')) {
+        await sendCredentialsWhatsApp();
       }
       return;
     }
-    
-    if (data?.user?.id) {
-      // Guardar en tabla profiles
-      const { error: profileError } = await client
-        .from('profiles')
-        .insert({ 
-          id: data.user.id,
-          email: email,
-          full_name: name,
-          role: 'member',
-          created_at: new Date().toISOString()
-        });
-      
-      if (profileError) {
-        console.error('Error creando profile:', profileError);
-        showToast('Cuenta creada pero hubo problema con el perfil', 'warning');
+
+    // Caso 3: No existe → Crear cuenta nueva
+    showToast('Creando cuenta de acceso...', 'info');
+
+    const tempPassword = generateTemporaryPassword();
+
+    const { data, error } = await client.auth.admin.createUser({
+      email: member.email,
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: {
+        name: member.name,
+        role: 'member',
+        phone: member.phone || ''
       }
-      
-      // Enviar credenciales por WhatsApp
-      if (typeof window.sendWelcomeWithCredentials === 'function') {
-        await window.sendWelcomeWithCredentials(currentProfileMember, tempPassword);
-      }
-      
-      showToast('✅ Cuenta de acceso creada exitosamente', 'success');
-      await updateUserAuthUI();
+    });
+
+    if (error) throw error;
+
+    // Crear perfil
+    const { error: profileError } = await client.from('profiles').insert({
+      id: data.user.id,
+      email: member.email,
+      full_name: member.name,
+      role: 'member',
+      created_at: new Date().toISOString()
+    });
+
+    if (profileError) {
+      console.warn('Error al crear perfil:', profileError.message);
     }
-    
+
+    // Enviar credenciales
+    await sendWelcomeWithCredentials(member, tempPassword);
+
+    showToast('✅ Cuenta de acceso creada y credenciales enviadas', 'success');
+    await updateUserAuthUI();
+
   } catch (error) {
     console.error('Error en createUserAuthForMember:', error);
-    showToast('Error: ' + error.message, 'error');
+    
+    if (error.message?.includes('already registered') || error.message?.includes('already exists')) {
+      showToast('El email ya está registrado. Intentando arreglar perfil...', 'warning');
+      // Reintento inteligente
+      await createUserAuthForMemberDirect?.(member);
+    } else {
+      showToast('Error: ' + error.message, 'error');
+    }
   }
 }
 
