@@ -502,40 +502,42 @@
             </table>
           </div>
           
-          <!-- VISTA CARDS -->
+             <!-- VISTA CARDS -->
           <div id="cardView" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 hidden"></div>
+        </div>  <!-- ✅ ESTE CIERRA page-members -->
+        
+        <!-- ✅ PÁGINA CHECK-IN LIST (AHORA FUERA DE page-members) -->
+        <div id="page-checkin-list" class="hidden animate-fade-in">
+          <h2 class="text-3xl font-bold mb-8">Registro de Asistencias</h2>
+          <div class="bg-zinc-900/50 backdrop-blur p-6 rounded-3xl border border-zinc-800">
+            <h3 class="text-xl font-semibold mb-4">
+              Check-ins de Hoy 
+              <span class="text-sky-400" id="todayCount">0</span>
+            </h3>
+            <div id="todayCheckinsList" class="space-y-3 max-h-[70vh] overflow-y-auto"></div>
+          </div>
         </div>
         
-        <div id="page-checkin-list" class="hidden animate-fade-in">
-  <h2 class="text-3xl font-bold mb-8">Registro de Asistencias</h2>
-  <div class="bg-zinc-900/50 backdrop-blur p-6 rounded-3xl border border-zinc-800">
-    <h3 class="text-xl font-semibold mb-4">
-      Check-ins de Hoy 
-      <span class="text-sky-400" id="todayCount">0</span>
-    </h3>
-    <div id="todayCheckinsList" class="space-y-3 max-h-[70vh] overflow-y-auto"></div>
-  </div>
-</div>
-
-<div id="page-qr-scanner" class="hidden animate-fade-in">
-  <h2 class="text-3xl font-bold mb-8">Control de Acceso</h2>
-  <div class="max-w-md mx-auto">
-    <div class="bg-zinc-900/50 backdrop-blur p-6 rounded-3xl border border-zinc-800">
-      <h3 class="text-xl font-semibold mb-4">Escanear Código QR</h3>
-      <div class="qr-scanner bg-black rounded-2xl overflow-hidden" style="min-height: 350px;">
-        <div id="reader" style="width: 100%; min-height: 350px;"></div>
-      </div>
-      <div class="mt-4">
-        <input type="text" id="manualQRInput" placeholder="O ingresa ID manualmente" 
-               class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3">
-        <button onclick="processCheckin()" class="mt-3 w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-semibold transition">
-          <i class="fas fa-check-circle mr-2"></i> Registrar Entrada
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
+        <!-- ✅ PÁGINA QR SCANNER (AHORA FUERA DE page-members) -->
+        <div id="page-qr-scanner" class="hidden animate-fade-in">
+          <h2 class="text-3xl font-bold mb-8">Control de Acceso</h2>
+          <div class="max-w-md mx-auto">
+            <div class="bg-zinc-900/50 backdrop-blur p-6 rounded-3xl border border-zinc-800">
+              <h3 class="text-xl font-semibold mb-4">Escanear Código QR</h3>
+              <div class="qr-scanner bg-black rounded-2xl overflow-hidden" style="min-height: 350px;">
+                <div id="reader" style="width: 100%; min-height: 350px;"></div>
+              </div>
+              <div class="mt-4">
+                <input type="text" id="manualQRInput" placeholder="O ingresa ID manualmente" 
+                       class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3">
+                <button onclick="processCheckin()" class="mt-3 w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-semibold transition">
+                  <i class="fas fa-check-circle mr-2"></i> Registrar Entrada
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+              
         <!-- Payments Page -->
         <div id="page-payments" class="hidden animate-fade-in">
           <div class="flex justify-between items-center mb-6">

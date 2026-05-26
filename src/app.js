@@ -15,6 +15,7 @@ let isInitializing = false;
 let isLoadingDashboard = false;
 let currentView = 'table';
 let lastChartsLoad = 0;
+let isScannerActive = false;
 const CHARTS_REFRESH_INTERVAL = 30000; // 30 segundos
 
 // ============ AUTH ============
@@ -63,33 +64,59 @@ function checkAuth() {
   }
 }
 
-// ============ UI NAVIGATION ============
 async function showPage(page) {
-  const pages = ['dashboard', 'members', 'checkin', 'payments', 'whatsapp'];
+  console.log('📄 Cambiando a página:', page);
+  
+  // 1. Ocultar TODAS las páginas
+  const pages = ['dashboard', 'members', 'checkin-list', 'qr-scanner', 'payments', 'whatsapp'];
   pages.forEach(p => {
     const el = document.getElementById(`page-${p}`);
     if (el) el.classList.add('hidden');
   });
   
+  // 2. Mostrar SOLO la página seleccionada
   const activePage = document.getElementById(`page-${page}`);
-  if (activePage) activePage.classList.remove('hidden');
+  if (activePage) {
+    activePage.classList.remove('hidden');
+  } else {
+    console.error('❌ Página no encontrada:', page);
+    return;
+  }
   
-  const buttons = ['dashboard', 'members', 'checkin', 'payments', 'whatsapp'];
+  // 3. Quitar clase activa de TODOS los botones
+  const buttons = ['dashboard', 'members', 'checkin-list', 'qr-scanner', 'payments', 'whatsapp'];
   buttons.forEach(btn => {
     const btnEl = document.getElementById(`btn-${btn}`);
-    if (btnEl) btnEl.classList.remove('nav-active');
+    if (btnEl) {
+      btnEl.classList.remove('bg-sky-600', 'text-white');
+      btnEl.classList.add('text-zinc-400');
+    }
   });
   
+  // 4. Poner clase activa SOLO al botón clickeado
   const activeBtn = document.getElementById(`btn-${page}`);
-  if (activeBtn) activeBtn.classList.add('nav-active');
+  if (activeBtn) {
+    activeBtn.classList.remove('text-zinc-400');
+    activeBtn.classList.add('bg-sky-600', 'text-white');
+  }
   
-  // ✅ INICIAR CÁMARA SOLO SI ENTRAMOS A CHECK-IN
-  if (page === 'checkin') {
-    await startQRScanner();
-  } 
-  // ✅ DETENER CÁMARA SI SALIMOS DE CHECK-IN
-  else {
-    await stopQRScanner();
+  // 5. Manejar cámara SOLO para la página QR
+  if (page === 'qr-scanner') {
+    // Detener cualquier escáner previo
+    if (typeof stopQRScanner === 'function') {
+      await stopQRScanner();
+    }
+    // Iniciar escáner nuevo con pequeño retraso
+    setTimeout(() => {
+      if (typeof startQRScanner === 'function') {
+        startQRScanner();
+      }
+    }, 200);
+  } else {
+    // Detener escáner si no estamos en QR
+    if (typeof stopQRScanner === 'function') {
+      await stopQRScanner();
+    }
   }
 }
 
@@ -403,13 +430,15 @@ async function updateChartData() {
 
 // ============ CHECK-IN QR stop ========
 async function stopQRScanner() {
+  console.log('📷 Deteniendo escáner QR...');
+  
   if (html5QrCode && html5QrCode.isScanning) {
     try {
       await html5QrCode.stop();
       await html5QrCode.clear();
-      console.log('📷 Escáner QR detenido correctamente');
+      console.log('✅ Escáner QR detenido correctamente');
       
-      // Limpiar el contenedor del lector
+      // Limpiar el contenedor
       const readerDiv = document.getElementById('reader');
       if (readerDiv) {
         readerDiv.innerHTML = '';
@@ -419,7 +448,10 @@ async function stopQRScanner() {
       console.warn('Error al detener escáner:', error);
     }
   }
+  
+  html5QrCode = null;
   scannerStarting = false;
+  isScannerActive = false;
   qrProcessing = false;
 }
 
@@ -616,30 +648,40 @@ async function loadTodayCheckins() {
 }
 
 async function startQRScanner() {
-  // ✅ Si ya está escaneando, no hacer nada
-  if (html5QrCode && html5QrCode.isScanning) {
+  // Evitar múltiples inicios
+  if (isScannerActive) {
     console.log('📷 Escáner ya está activo');
     return;
   }
- 
-  if (scannerStarting) return;
+  
+  if (scannerStarting) {
+    console.log('📷 Escáner ya está iniciando');
+    return;
+  }
+  
   scannerStarting = true;
-  console.log('📷 Iniciando escáner QR PRO...');
+  console.log('📷 Iniciando escáner QR...');
 
   try {
+    // Limpiar instancia anterior si existe
     if (html5QrCode) {
       try {
         await html5QrCode.stop();
         await html5QrCode.clear();
-      } catch (e) {}
+      } catch (e) {
+        console.log('Limpiando escáner anterior:', e);
+      }
+      html5QrCode = null;
     }
 
     const scannerElement = document.getElementById('reader');
     if (!scannerElement) {
       scannerStarting = false;
+      console.error('❌ Elemento reader no encontrado');
       return;
     }
 
+    // Limpiar y preparar el contenedor
     scannerElement.innerHTML = '';
     scannerElement.style.minHeight = '350px';
     scannerElement.style.background = '#000';
@@ -647,16 +689,20 @@ async function startQRScanner() {
     scannerElement.style.borderRadius = '20px';
     scannerElement.style.overflow = 'hidden';
 
-    if (!navigator.mediaDevices?.getUserMedia) {
+    // Verificar soporte de cámara
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       scannerElement.innerHTML = `<div class="text-center p-8 text-red-400"><i class="fas fa-camera-slash text-5xl mb-3"></i><p>Tu navegador no soporta cámara</p></div>`;
       scannerStarting = false;
       return;
     }
 
+    // Mostrar loading
     scannerElement.innerHTML = `<div class="flex flex-col items-center justify-center h-full p-8"><div class="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-400 mb-4"></div><p class="text-zinc-400">Iniciando cámara...</p></div>`;
 
+    // Crear nueva instancia
     html5QrCode = new Html5Qrcode("reader");
 
+    // Función para sonido
     function playBeepSound() {
       try {
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -673,16 +719,21 @@ async function startQRScanner() {
       } catch (e) {}
     }
 
+    // Callback de éxito
     const onScanSuccess = async (decodedText) => {
       if (qrProcessing) return;
       qrProcessing = true;
+      
       if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
       playBeepSound();
+      
       const input = document.getElementById('manualQRInput');
       if (input) input.value = decodedText;
+      
       try {
         await processCheckin();
       } catch (e) {
+        console.error('Error en check-in:', e);
         showToast('Error al procesar check-in', 'error');
       } finally {
         setTimeout(() => { qrProcessing = false; }, 2000);
@@ -690,6 +741,7 @@ async function startQRScanner() {
     };
 
     const onScanError = (err) => {
+      // Ignorar errores comunes de escaneo
       if (err?.includes('NotFoundException') || 
           err?.includes('No MultiFormat Readers') || 
           err?.includes('source width is 0') || 
@@ -700,39 +752,61 @@ async function startQRScanner() {
       console.warn('⚠️ Error escáner:', err);
     };
 
-    const config = { fps: 12, qrbox: { width: 170, height: 170 }, aspectRatio: 1.0, disableFlip: false, rememberLastUsedCamera: true, formatsToSupport: [0] };
+    const config = { 
+      fps: 12, 
+      qrbox: { width: 170, height: 170 }, 
+      aspectRatio: 1.0, 
+      disableFlip: false, 
+      rememberLastUsedCamera: true, 
+      formatsToSupport: [0] 
+    };
 
+    // Intentar obtener cámaras
     try {
       const cameras = await Html5Qrcode.getCameras();
       if (cameras && cameras.length > 0) {
-        const backCamera = cameras.find(cam => cam.label.toLowerCase().includes('back') || cam.label.toLowerCase().includes('rear') || cam.label.toLowerCase().includes('environment'));
+        const backCamera = cameras.find(cam => 
+          cam.label.toLowerCase().includes('back') || 
+          cam.label.toLowerCase().includes('rear') || 
+          cam.label.toLowerCase().includes('environment')
+        );
         const cameraId = backCamera ? backCamera.id : cameras[0].id;
         await html5QrCode.start(cameraId, config, onScanSuccess, onScanError);
+        isScannerActive = true;
+        console.log('✅ Escáner iniciado con cámara:', backCamera ? 'trasera' : 'frontal');
       } else {
         await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanError);
+        isScannerActive = true;
+        console.log('✅ Escáner iniciado con facingMode environment');
       }
     } catch (cameraError) {
+      console.warn('Error con cámara específica, usando facingMode:', cameraError);
       await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanError);
+      isScannerActive = true;
     }
 
+    // Ajustar video
     setTimeout(() => {
       const video = document.querySelector('#reader video');
-      if (!video) return;
-      video.style.display = 'block';
-      video.style.width = '100%';
-      video.style.height = '100%';
-      video.style.objectFit = 'cover';
-      video.setAttribute('playsinline', true);
-      video.setAttribute('autoplay', true);
-      video.setAttribute('muted', true);
-      video.play().catch(() => {});
+      if (video) {
+        video.style.display = 'block';
+        video.style.width = '100%';
+        video.style.height = '100%';
+        video.style.objectFit = 'cover';
+        video.setAttribute('playsinline', true);
+        video.setAttribute('autoplay', true);
+        video.setAttribute('muted', true);
+        video.play().catch(() => {});
+      }
     }, 500);
 
   } catch (err) {
+    console.error('❌ Error iniciando escáner:', err);
     const scannerElement = document.getElementById('reader');
     if (scannerElement) {
       scannerElement.innerHTML = `<div class="bg-yellow-900/30 rounded-2xl p-6 text-center"><i class="fas fa-camera-slash text-5xl text-yellow-400 mb-4"></i><p class="text-white font-semibold">No se pudo acceder a la cámara</p><button onclick="startQRScanner()" class="mt-4 px-4 py-2 bg-sky-600 rounded-xl">Reintentar</button></div>`;
     }
+    isScannerActive = false;
   } finally {
     scannerStarting = false;
   }
