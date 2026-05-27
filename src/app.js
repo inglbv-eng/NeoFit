@@ -162,53 +162,62 @@ async function loadTodayCheckins() {
     const client = window.supabaseClient();
     if (!client) return;
 
-    const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = new Date().toISOString().split('T')[0];
 
-    const { data, error } = await client
+    // 1. Traer solo los check-ins
+    const { data: checkins, error } = await client
       .from('checkins')
-      .select(`*, members (name, plan)`)
+      .select('*')
       .gte('checkin_time', `${todayStr} 00:00:00`)
       .lte('checkin_time', `${todayStr} 23:59:59`)
       .order('checkin_time', { ascending: false });
 
     if (error) throw error;
 
-    // Actualizar contadores
-    const count = data?.length || 0;
-    const todayCountEl = document.getElementById('todayCount');
-    if (todayCountEl) todayCountEl.textContent = count;
-    
-    // Guardar en localStorage para el badge
-    localStorage.setItem(`checkin_count_${todayStr}`, count.toString());
-    updateCheckinBadge();
-
-    const container = document.getElementById('todayCheckinsList');
-    if (!container) return;
-
-    if (!data || data.length === 0) {
-      container.innerHTML = `<div class="text-center py-12 text-zinc-400"><i class="fas fa-clock text-5xl mb-4 opacity-30"></i><p class="text-lg">Aún no hay check-ins hoy</p></div>`;
+    if (!checkins || checkins.length === 0) {
+      document.getElementById('todayCheckinsList').innerHTML = `<div class="text-center py-12">Aún no hay check-ins hoy</div>`;
+      document.getElementById('todayCount').textContent = '0';
       return;
     }
 
-    // Animación de entrada para nuevos elementos (opcional)
-    container.innerHTML = data.map(c => {
+    // 2. Traer los nombres de los miembros (uno por uno o en lote)
+    const memberIds = [...new Set(checkins.map(c => c.member_id))];
+    
+    // Opción A: Traer todos los miembros de una vez
+    const { data: members } = await client
+      .from('members')
+      .select('id, name, plan')
+      .in('id', memberIds);
+    
+    // Crear un mapa para acceso rápido
+    const memberMap = {};
+    members.forEach(m => { memberMap[m.id] = m; });
+
+    // 3. Actualizar el contador
+    document.getElementById('todayCount').textContent = checkins.length;
+
+    // 4. Mostrar en pantalla
+    const container = document.getElementById('todayCheckinsList');
+    container.innerHTML = checkins.map(c => {
+      const member = memberMap[c.member_id];
       const date = new Date(c.checkin_time);
-      const timeStr = `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
-      return `<div class="flex items-center justify-between p-4 bg-zinc-800 rounded-2xl animate-fade-in">
-        <div>
-          <p class="font-semibold">${escapeHtml(c.members?.name || 'Desconocido')}</p>
-          <p class="text-sm text-zinc-400">${c.members?.plan || '-'}</p>
+      const hora = `${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`;
+      
+      return `
+        <div class="flex items-center justify-between p-4 bg-zinc-800 rounded-2xl">
+          <div>
+            <p class="font-semibold">${escapeHtml(member?.name || 'Desconocido')}</p>
+            <p class="text-sm text-zinc-400">${member?.plan || '-'}</p>
+          </div>
+          <div class="text-emerald-400 font-medium">
+            <i class="fas fa-clock"></i> ${hora}
+          </div>
         </div>
-        <div class="text-emerald-400 font-medium">
-          <i class="fas fa-clock"></i> ${timeStr}
-          <span class="ml-2 text-xs text-green-500 new-checkin-indicator" style="display: none;">NUEVO</span>
-        </div>
-      </div>`;
+      `;
     }).join('');
 
   } catch (error) {
-    console.error('Error loading today checkins:', error);
+    console.error('Error en loadTodayCheckins:', error);
   }
 }
 
@@ -2150,23 +2159,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // ✅ LIMPIEZA AUTOMÁTICA (solo check-ins antiguos)
   cleanOldCheckins();
   
-  // ✅ MANEJO DE VISIBILIDAD (SIN AUTO-REFRESH)
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
-      // Solo actualizar datos si estamos en checkin o dashboard
-      const currentPage = getCurrentPage();
-      if (currentPage === 'checkin-list' || currentPage === 'dashboard') {
-        loadTodayCheckins();
-        if (currentPage === 'dashboard') loadDashboardData();
-      }
-      
-      // Verificar estado de Realtime
-      if (checkRealtimeStatus() !== 'SUBSCRIBED') {
-        console.log('🔄 Realtime desconectado, reconectando...');
-        setupRealtimeCheckins();
-      }
-    }
-  });
 });
 
 // ============ EXPONER FUNCIONES GLOBALES (SOLO UNA VEZ) ============
