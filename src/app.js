@@ -1786,11 +1786,21 @@ async function checkForNewCheckins() {
     
     const today = new Date().toISOString().split('T')[0];
     
+    // Verificar si cambió el día
+    const storedDate = localStorage.getItem('checkin_last_date');
+    if (storedDate !== today) {
+      // Reiniciar contador para el nuevo día
+      localStorage.setItem('checkin_last_date', today);
+      localStorage.setItem('checkin_last_count', '0');
+      lastCheckinCount = 0;
+      console.log('📅 Nuevo día detectado, contador reiniciado');
+    }
+    
     const { count: currentCount } = await client
       .from('checkins')
       .select('*', { count: 'exact', head: true })
       .gte('checkin_time', `${today} 00:00:00`)
-      .lte('checkin_time', `${today} 23:59:59`);  // ✅ CORREGIDO
+      .lte('checkin_time', `${today} 23:59:59`);
     
     console.log(`🔍 Verificando - Actual: ${currentCount}, Anterior: ${lastCheckinCount}`);
     
@@ -1798,59 +1808,76 @@ async function checkForNewCheckins() {
       console.log(`🔄 NUEVO CHECK-IN! Antes: ${lastCheckinCount}, Ahora: ${currentCount}`);
       
       await loadTodayCheckins();
+      await loadDashboardData();
       
       if (currentCount > lastCheckinCount) {
         const nuevos = currentCount - lastCheckinCount;
         showToast(`🎉 ${nuevos} nuevo${nuevos > 1 ? 's' : ''} check-in${nuevos > 1 ? 's' : ''}!`, 'success');
       }
       
+      // ✅ Guardar en localStorage para mantener el estado
       lastCheckinCount = currentCount || 0;
+      localStorage.setItem('checkin_last_count', lastCheckinCount.toString());
     }
     
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error checking for new checkins:', error);
   }
 }
 
 function startAutoRefreshCheckins() {
   // ✅ Evitar múltiples intervalos
   if (autoRefreshInterval) {
-    console.log('⚠️ Auto-refresh ya estaba corriendo, deteniendo anterior...');
     clearInterval(autoRefreshInterval);
     autoRefreshInterval = null;
   }
   
   console.log('🔄 Iniciando actualización automática de check-ins (cada 5 segundos)');
   
-  // Inicializar contador inmediatamente
+  // ✅ Función para obtener la fecha actual (YYYY-MM-DD)
+  function getTodayDate() {
+    return new Date().toISOString().split('T')[0];
+  }
+  
+  // ✅ Inicializar contador desde localStorage o Supabase
   (async () => {
     const client = window.supabaseClient();
     if (client) {
-      const today = new Date().toISOString().split('T')[0];
-      const { count } = await client
-        .from('checkins')
-        .select('*', { count: 'exact', head: true })
-        .gte('checkin_time', `${today} 00:00:00`)
-        .lte('checkin_time', `${today} 23:59:59`);
-      lastCheckinCount = count || 0;
-      console.log(`📊 Contador inicial de check-ins: ${lastCheckinCount}`);
+      const today = getTodayDate();
+      const storedDate = localStorage.getItem('checkin_last_date');
+      const storedCount = localStorage.getItem('checkin_last_count');
+      
+      // Si cambió el día, reiniciar contador
+      if (storedDate !== today) {
+        localStorage.setItem('checkin_last_date', today);
+        localStorage.setItem('checkin_last_count', '0');
+        lastCheckinCount = 0;
+        console.log('📅 Nuevo día detectado, contador reiniciado a 0');
+      } else if (storedCount !== null) {
+        lastCheckinCount = parseInt(storedCount) || 0;
+        console.log(`📊 Contador recuperado de localStorage: ${lastCheckinCount}`);
+      } else {
+        // Obtener desde Supabase
+        const { count } = await client
+          .from('checkins')
+          .select('*', { count: 'exact', head: true })
+          .gte('checkin_time', `${today} 00:00:00`)
+          .lte('checkin_time', `${today} 23:59:59`);
+        lastCheckinCount = count || 0;
+        localStorage.setItem('checkin_last_date', today);
+        localStorage.setItem('checkin_last_count', lastCheckinCount.toString());
+        console.log(`📊 Contador inicial desde Supabase: ${lastCheckinCount}`);
+      }
     }
   })();
   
   // Revisar cada 5 segundos
   autoRefreshInterval = setInterval(() => {
-    // ✅ SOLO verificar si estamos en checkin-list
     const checkinPage = document.getElementById('page-checkin-list');
     const isOnCheckinPage = checkinPage && !checkinPage.classList.contains('hidden');
     
     if (isOnCheckinPage) {
-      console.log('🔍 Auto-refresh: estamos en Check-in, revisando...');
       checkForNewCheckins();
-    } else {
-      // No mostrar logs constantemente
-      if (autoRefreshInterval && Math.random() < 0.05) {
-        console.log('💤 Auto-refresh: pausado (no estamos en página de Check-in)');
-      }
     }
   }, 5000);
 }
