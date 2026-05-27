@@ -162,59 +162,65 @@ async function loadTodayCheckins() {
     const client = window.supabaseClient();
     if (!client) return;
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    console.log('📅 Cargando check-ins del:', todayStr);
+    // Obtener fecha local (México)
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+    
+    console.log('📅 Buscando:', todayStr);
 
-    // PASO 1: Traer todos los check-ins de hoy
-    const { data: checkins, error: checkinsError } = await client
+    // Traer check-ins de hoy (solo fecha, sin hora)
+    const { data: checkins, error } = await client
       .from('checkins')
       .select('*')
       .gte('checkin_time', `${todayStr} 00:00:00`)
       .lte('checkin_time', `${todayStr} 23:59:59`)
       .order('checkin_time', { ascending: false });
 
-    if (checkinsError) throw checkinsError;
+    if (error) throw error;
 
-    console.log('📊 Check-ins encontrados:', checkins?.length || 0);
-
-    // Actualizar contador
-    const count = checkins?.length || 0;
-    document.getElementById('todayCount').textContent = count;
+    console.log('📊 Encontrados:', checkins?.length || 0);
 
     if (!checkins || checkins.length === 0) {
-      document.getElementById('todayCheckinsList').innerHTML = `<div class="text-center py-12 text-zinc-400">
-        <i class="fas fa-clock text-5xl mb-4 opacity-30"></i>
-        <p class="text-lg">Aún no hay check-ins hoy</p>
-      </div>`;
+      const container = document.getElementById('todayCheckinsList');
+      if (container) {
+        container.innerHTML = `<div class="text-center py-12 text-zinc-400">
+          <i class="fas fa-clock text-5xl mb-4 opacity-30"></i>
+          <p class="text-lg">Aún no hay check-ins hoy</p>
+        </div>`;
+      }
+      const countEl = document.getElementById('todayCount');
+      if (countEl) countEl.textContent = '0';
       return;
     }
 
-    // PASO 2: Traer los nombres de los miembros (usando los IDs de los check-ins)
+    // Traer nombres de miembros
     const memberIds = [...new Set(checkins.map(c => c.member_id))];
-    
-    const { data: members, error: membersError } = await client
+    const { data: members } = await client
       .from('members')
       .select('id, name, plan')
       .in('id', memberIds);
 
-    if (membersError) throw membersError;
-
-    // Crear un mapa para acceso rápido
     const memberMap = {};
-    members.forEach(m => { memberMap[m.id] = m; });
+    members?.forEach(m => { memberMap[m.id] = m; });
 
-    // PASO 3: Mostrar en pantalla
+    // Mostrar en pantalla (SOLO HORA LOCAL)
+    document.getElementById('todayCount').textContent = checkins.length;
+    
     const container = document.getElementById('todayCheckinsList');
     container.innerHTML = checkins.map(c => {
       const member = memberMap[c.member_id];
+      // Obtener SOLO la hora local
       const date = new Date(c.checkin_time);
-      const hora = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+      const hora = date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
       
       return `
         <div class="flex items-center justify-between p-4 bg-zinc-800 rounded-2xl">
           <div>
             <p class="font-semibold text-white">${escapeHtml(member?.name || 'Desconocido')}</p>
-            <p class="text-sm text-zinc-400">${member?.plan || 'Sin plan'}</p>
+            <p class="text-sm text-zinc-400">${member?.plan || '-'}</p>
           </div>
           <div class="text-emerald-400 font-medium">
             <i class="fas fa-clock"></i> ${hora}
@@ -224,18 +230,13 @@ async function loadTodayCheckins() {
     }).join('');
 
     // Guardar en localStorage para el badge
-    localStorage.setItem(`checkin_count_${todayStr}`, count.toString());
+    localStorage.setItem(`checkin_count_${todayStr}`, checkins.length.toString());
     updateCheckinBadge();
 
-    console.log('✅ Lista actualizada con', checkins.length, 'check-ins');
-    if (checkins.length > 0) {
-      console.log('📝 Primer check-in:', checkins[0]);
-      console.log('👤 Miembro:', memberMap[checkins[0].member_id]?.name);
-    }
+    console.log('✅ Mostrando', checkins.length, 'check-ins');
 
   } catch (error) {
-    console.error('❌ Error en loadTodayCheckins:', error);
-    showToast('Error al cargar los check-ins', 'error');
+    console.error('❌ Error:', error);
   }
 }
 
