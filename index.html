@@ -403,6 +403,18 @@
     </div>
   </div>
 
+   <!-- Indicador de estado Realtime -->
+  <div class="bg-zinc-800 rounded-2xl p-4 mb-6 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-3 h-3 rounded-full bg-green-500 animate-pulse" id="realtimeIndicator"></div>
+      <span class="text-sm text-zinc-300">Actualización en tiempo real activa</span>
+    </div>
+    <button onclick="restartRealtime()" class="text-xs text-sky-400 hover:text-sky-300">
+      <i class="fas fa-sync-alt"></i> Reconectar
+    </button>
+  </div>
+
+  <!-- ========== GRÁFICOS ========== -->
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
     <div class="bg-zinc-900/50 backdrop-blur p-4 rounded-xl border border-zinc-800">
       <h3 class="text-base font-semibold mb-2">Check-ins Últimos 7 Días</h3>

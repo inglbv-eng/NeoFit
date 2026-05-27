@@ -1,6 +1,3 @@
-// ============ VERIFICACIÓN DE ADMIN ============
-// (Comentado porque se usa login.html)
-
 // ============ VARIABLES GLOBALES ============
 let currentUser = null;
 let allMembers = [];
@@ -16,56 +13,255 @@ let isLoadingDashboard = false;
 let currentView = 'table';
 let lastChartsLoad = 0;
 let isScannerActive = false;
-let autoRefreshInterval = null;
-let lastCheckinCount = 0;
+let realtimeSubscription = null; // NUEVA VARIABLE
 const CHARTS_REFRESH_INTERVAL = 30000; // 30 segundos
 
-// ============ AUTH ============
-function logout() {
-  const client = window.supabaseClient();
-  if (client) client.auth.signOut();
-  currentUser = null;
-  localStorage.removeItem('user');
-  localStorage.removeItem('userRole');
-  localStorage.removeItem('neofit_client');
-  window.location.href = 'login.html';
+// ============ REALTIME PARA CHECK-INS INSTANTÁNEOS ============
+async function setupRealtimeCheckins() {
+  try {
+    const client = window.supabaseClient();
+    if (!client) {
+      console.log('⏳ Esperando Supabase...');
+      setTimeout(setupRealtimeCheckins, 1000);
+      return;
+    }
+
+    // Si ya hay una suscripción activa, limpiarla primero
+    if (realtimeSubscription) {
+      console.log('🔄 Limpiando suscripción Realtime anterior...');
+      await realtimeSubscription.unsubscribe();
+      realtimeSubscription = null;
+    }
+
+    console.log('🔌 Configurando Realtime para check-ins...');
+
+    // Crear canal para escuchar cambios en checkins
+    const channel = client.channel('checkins-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',  // Solo escuchar nuevos check-ins
+          schema: 'public',
+          table: 'checkins'
+        },
+        async (payload) => {
+          console.log('📡 NUEVO CHECK-IN DETECTADO EN TIEMPO REAL!', payload);
+          
+          const newCheckin = payload.new;
+          
+          if (!newCheckin || !newCheckin.member_id) {
+            console.warn('⚠️ Payload inválido:', newCheckin);
+            return;
+          }
+
+          // Obtener información del miembro
+          try {
+            const { data: member, error: memberError } = await client
+              .from('members')
+              .select('name, plan')
+              .eq('id', newCheckin.member_id)
+              .single();
+
+            if (memberError) throw memberError;
+
+            // Obtener el miembro completo para otras funciones
+            const fullMember = allMembers.find(m => m.id === newCheckin.member_id);
+            
+            // Verificar la página actual
+            const currentPage = getCurrentPage();
+            
+            // 1. Actualizar la lista de check-ins de hoy SI estamos en esa página o en dashboard
+            if (currentPage === 'checkin-list' || currentPage === 'dashboard') {
+              await loadTodayCheckins();
+              console.log('✅ Lista de check-ins actualizada');
+            }
+            
+            // 2. Actualizar el contador del dashboard
+            if (currentPage === 'dashboard') {
+              await loadDashboardData();
+            }
+            
+            // 3. Actualizar contador en tiempo real en el botón (opcional)
+            updateCheckinBadge();
+            
+            // 4. Mostrar notificación flotante
+            showToast(`🔔 NUEVO CHECK-IN: ${member.name} (${member.plan})`, 'success', 4000);
+            
+            // 5. Si el perfil del miembro está abierto y es el mismo, actualizar sus check-ins
+            if (currentProfileMember && currentProfileMember.id === newCheckin.member_id) {
+              await loadProfileCheckins(currentProfileMember.id);
+            }
+            
+            // 6. Actualizar el contador de check-ins en localStorage
+            const today = new Date().toISOString().split('T')[0];
+            const currentCount = parseInt(localStorage.getItem(`checkin_count_${today}`)) || 0;
+            localStorage.setItem(`checkin_count_${today}`, (currentCount + 1).toString());
+            
+            // 7. Si estamos en la página de miembros, actualizar el último check-in en la tabla
+            if (currentPage === 'members' && fullMember) {
+              // Actualizar el miembro en allMembers
+              const memberIndex = allMembers.findIndex(m => m.id === newCheckin.member_id);
+              if (memberIndex !== -1) {
+                allMembers[memberIndex].last_checkin = newCheckin.checkin_time;
+                if (typeof updateMembersTable === 'function') {
+                  await updateMembersTable();
+                }
+              }
+            }
+            
+          } catch (error) {
+            console.error('❌ Error procesando check-in en tiempo real:', error);
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Realtime activo - Escuchando nuevos check-ins');
+        } else if (status === 'CHANNEL_ERROR') {
+          // No mostrar error si es el primer intento o error de transporte temporal
+          if (err?.message?.includes('transport failure') || err?.message?.includes('WebSocket')) {
+            console.log('🔄 Intentando reconectar Realtime...');
+          } else {
+            console.warn('⚠️ Error en canal Realtime:', err?.message || err);
+          }
+          setTimeout(() => setupRealtimeCheckins(), 5000);
+        } else if (status === 'TIMED_OUT') {
+          console.log('🔄 Realtime timeout, reconectando...');
+          setTimeout(() => setupRealtimeCheckins(), 3000);
+        }
+      });
+        
+    realtimeSubscription = channel;
+    
+    return channel;
+    
+  } catch (error) {
+    console.error('❌ Error configurando Realtime:', error);
+    // Reintentar después de 10 segundos
+    setTimeout(() => setupRealtimeCheckins(), 10000);
+  }
 }
 
-function showMainApp() {
-  const loginScreen = document.getElementById('loginScreen');
-  if (loginScreen) loginScreen.classList.add('hidden');
-  document.getElementById('mainApp').classList.remove('hidden');
-}
-
-function checkAuth() {
-  const user = localStorage.getItem('user');
-  const userRole = localStorage.getItem('userRole');
+// Función para actualizar badge en el botón de check-ins
+function updateCheckinBadge() {
+  const today = new Date().toISOString().split('T')[0];
+  const count = localStorage.getItem(`checkin_count_${today}`);
+  const badgeElement = document.getElementById('checkinBadge');
   
-  if (!user || userRole !== 'admin') {
-    window.location.href = 'login.html';
-    return;
-  }
-  
-  if (!window.supabaseReady()) {
-    window.onSupabaseReady(() => {
-      if (localStorage.getItem('user')) {
-        currentUser = JSON.parse(localStorage.getItem('user'));
-        showMainApp();
-        initializeAppData();
-      } else {
-        window.location.href = 'login.html';
-      }
-    });
-    return;
-  }
-  
-  if (user) {
-    currentUser = JSON.parse(user);
-    showMainApp();
-    initializeAppData();
+  if (badgeElement && count && parseInt(count) > 0) {
+    badgeElement.textContent = count;
+    badgeElement.classList.remove('hidden');
+  } else if (badgeElement) {
+    badgeElement.classList.add('hidden');
   }
 }
 
+// Función mejorada de loadTodayCheckins con caché local
+async function loadTodayCheckins() {
+  try {
+    const client = window.supabaseClient();
+    if (!client) return;
+
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    const { data, error } = await client
+      .from('checkins')
+      .select(`*, members (name, plan)`)
+      .gte('checkin_time', `${todayStr} 00:00:00`)
+      .lte('checkin_time', `${todayStr} 23:59:59`)
+      .order('checkin_time', { ascending: false });
+
+    if (error) throw error;
+
+    // Actualizar contadores
+    const count = data?.length || 0;
+    const todayCountEl = document.getElementById('todayCount');
+    if (todayCountEl) todayCountEl.textContent = count;
+    
+    // Guardar en localStorage para el badge
+    localStorage.setItem(`checkin_count_${todayStr}`, count.toString());
+    updateCheckinBadge();
+
+    const container = document.getElementById('todayCheckinsList');
+    if (!container) return;
+
+    if (!data || data.length === 0) {
+      container.innerHTML = `<div class="text-center py-12 text-zinc-400"><i class="fas fa-clock text-5xl mb-4 opacity-30"></i><p class="text-lg">Aún no hay check-ins hoy</p></div>`;
+      return;
+    }
+
+    // Animación de entrada para nuevos elementos (opcional)
+    container.innerHTML = data.map(c => {
+      const date = new Date(c.checkin_time);
+      const timeStr = `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+      return `<div class="flex items-center justify-between p-4 bg-zinc-800 rounded-2xl animate-fade-in">
+        <div>
+          <p class="font-semibold">${escapeHtml(c.members?.name || 'Desconocido')}</p>
+          <p class="text-sm text-zinc-400">${c.members?.plan || '-'}</p>
+        </div>
+        <div class="text-emerald-400 font-medium">
+          <i class="fas fa-clock"></i> ${timeStr}
+          <span class="ml-2 text-xs text-green-500 new-checkin-indicator" style="display: none;">NUEVO</span>
+        </div>
+      </div>`;
+    }).join('');
+
+  } catch (error) {
+    console.error('Error loading today checkins:', error);
+  }
+}
+
+// Función para verificar estado de Realtime
+function checkRealtimeStatus() {
+  if (realtimeSubscription) {
+    console.log('📡 Realtime activo:', realtimeSubscription.state);
+    return realtimeSubscription.state;
+  }
+  return 'DISCONNECTED';
+}
+
+// Función para reiniciar Realtime (si es necesario)
+async function restartRealtime() {
+  console.log('🔄 Reiniciando conexión Realtime...');
+  await setupRealtimeCheckins();
+}
+
+// ============ MODIFICAR INITIALIZEAPPDATA ============
+async function initializeAppData() {
+  if (isInitializing) return;
+  isInitializing = true;
+  
+  showToast('Cargando datos...', 'info');
+  try {
+    await loadDashboardData();
+    if (typeof loadMembers === 'function') await loadMembers();
+    await loadPayments();
+    await loadTodayCheckins();
+    
+    // ✅ INICIAR REALTIME DESPUÉS DE CARGAR DATOS
+    await setupRealtimeCheckins();
+       
+    const savedView = localStorage.getItem('membersView');
+    if (savedView === 'card') { 
+      currentView = 'card'; 
+    } else { 
+      currentView = 'table'; 
+    }
+    if (typeof updateViewDisplay === 'function') updateViewDisplay();
+    
+    showToast('Datos cargados correctamente');
+    console.log('✅ Realtime listo para recibir check-ins instantáneos');
+    
+  } catch (error) {
+    console.error('Error initializing app:', error);
+    showToast('Error al cargar datos', 'error');
+  } finally {
+    isInitializing = false;
+  }
+}
+
+// ============ MODIFICAR SHOWPAGE PARA GESTIONAR REALTIME ============
 async function showPage(page) {
   console.log('📄 Cambiando a página:', page);
   
@@ -104,21 +300,126 @@ async function showPage(page) {
   
   // 5. Manejar cámara SOLO para la página QR
   if (page === 'qr-scanner') {
-    // Detener cualquier escáner previo
     if (typeof stopQRScanner === 'function') {
       await stopQRScanner();
     }
-    // Iniciar escáner nuevo con pequeño retraso
     setTimeout(() => {
       if (typeof startQRScanner === 'function') {
         startQRScanner();
       }
     }, 200);
   } else {
-    // Detener escáner si no estamos en QR
     if (typeof stopQRScanner === 'function') {
       await stopQRScanner();
     }
+  }
+  
+  // 6. Si cambiamos a check-in list, refrescar datos
+  if (page === 'checkin-list') {
+    await loadTodayCheckins();
+  }
+}
+
+// ============ LIMPIAR REALTIME AL CERRAR SESIÓN ============
+function logout() {
+  const client = window.supabaseClient();
+  
+  // Limpiar suscripción Realtime
+  if (realtimeSubscription) {
+    realtimeSubscription.unsubscribe();
+    realtimeSubscription = null;
+  }
+  
+  if (client) client.auth.signOut();
+  currentUser = null;
+  localStorage.removeItem('user');
+  localStorage.removeItem('userRole');
+  localStorage.removeItem('neofit_client');
+  window.location.href = 'login.html';
+}
+
+// ============ AGREGAR CSS PARA ANIMACIONES ============
+function addRealtimeStyles() {
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .animate-fade-in {
+      animation: fadeIn 0.5s ease-out;
+    }
+    
+    @keyframes pulse {
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.1);
+      }
+    }
+    
+    .new-checkin-indicator {
+      animation: pulse 0.5s ease-out;
+    }
+    
+    /* Badge de notificación */
+    .notification-badge {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      background: #ef4444;
+      color: white;
+      border-radius: 9999px;
+      padding: 2px 6px;
+      font-size: 10px;
+      font-weight: bold;
+      min-width: 18px;
+      text-align: center;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function showMainApp() {
+  const loginScreen = document.getElementById('loginScreen');
+  if (loginScreen) loginScreen.classList.add('hidden');
+  document.getElementById('mainApp').classList.remove('hidden');
+}
+
+function checkAuth() {
+  const user = localStorage.getItem('user');
+  const userRole = localStorage.getItem('userRole');
+  
+  if (!user || userRole !== 'admin') {
+    window.location.href = 'login.html';
+    return;
+  }
+  
+  if (!window.supabaseReady()) {
+    window.onSupabaseReady(() => {
+      if (localStorage.getItem('user')) {
+        currentUser = JSON.parse(localStorage.getItem('user'));
+        showMainApp();
+        initializeAppData();
+      } else {
+        window.location.href = 'login.html';
+      }
+    });
+    return;
+  }
+  
+  if (user) {
+    currentUser = JSON.parse(user);
+    showMainApp();
+    initializeAppData();
   }
 }
 
@@ -463,18 +764,18 @@ async function hasCheckinToday(memberId) {
     const client = window.supabaseClient();
     if (!client) return false;
     
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    const todayStr = `${year}-${month}-${day}`;
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
     
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
     const { data, error } = await client
       .from('checkins')
       .select('id')
       .eq('member_id', memberId)
-      .gte('checkin_time', `${todayStr} 00:00:00`)
-      .lte('checkin_time', `${todayStr} 23:59:59`)
+      .gte('checkin_time', todayStart.toISOString())
+      .lte('checkin_time', todayEnd.toISOString())
       .limit(1);
     
     if (error) throw error;
@@ -486,7 +787,7 @@ async function hasCheckinToday(memberId) {
 }
 
 async function processCheckin() {
-  const qrInput = document.getElementById('manualQRInput')?.value || '';
+  const qrInput = document.getElementById('manualQRInput')?.value?.trim() || '';
   if (!qrInput) {
     showToast('Por favor ingresa o escanea un código QR', 'error');
     return;
@@ -498,7 +799,7 @@ async function processCheckin() {
     showToast('Código QR inválido', 'error');
     return;
   }
-  
+
   try {
     const client = window.supabaseClient();
     if (!client) throw new Error('Supabase no disponible');
@@ -514,6 +815,7 @@ async function processCheckin() {
       return;
     }
     
+    // Verificar si la membresía está vencida
     const today = new Date();
     const expiryDate = new Date(member.membership_end);
     if (expiryDate < today) {
@@ -521,6 +823,7 @@ async function processCheckin() {
       return;
     }
     
+    // Verificar si ya hizo check-in hoy
     const alreadyCheckedIn = await hasCheckinToday(member.id);
     if (alreadyCheckedIn) {
       showToast(`⚠️ ${member.name} ya registró asistencia hoy`, 'warning');
@@ -528,28 +831,34 @@ async function processCheckin() {
       return;
     }
     
+    // === INSERTAR CHECK-IN CON TIMESTAMP CORRECTO ===
     const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
-    const localDateTimeString = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-    
     const { error: checkinError } = await client
       .from('checkins')
-      .insert([{ member_id: member.id, checkin_time: localDateTimeString }]);
+      .insert([{
+        member_id: member.id,
+        checkin_time: now.toISOString()   // ← Mejor formato para Supabase
+      }]);
     
     if (checkinError) throw checkinError;
     
-    await client.from('members').update({ last_checkin: localDateTimeString }).eq('id', member.id);
+    // Actualizar último check-in del miembro
+    await client
+      .from('members')
+      .update({ last_checkin: now.toISOString() })
+      .eq('id', member.id);
     
-    showToast(`✅ Check-in exitoso! Bienvenido ${member.name}`);
+    showToast(`✅ Check-in exitoso! Bienvenido ${member.name}`, 'success');
+    
+    // Limpiar input
     document.getElementById('manualQRInput').value = '';
-    await loadTodayCheckins();
-    await loadDashboardData();
     
+    // Actualizar vistas
+    await Promise.all([
+      loadTodayCheckins(),
+      loadDashboardData()
+    ]);
+
   } catch (error) {
     console.error('Error processing check-in:', error);
     showToast('Error al procesar el check-in', 'error');
@@ -557,6 +866,11 @@ async function processCheckin() {
 }
 
 async function quickCheckin(memberId) {
+  if (!memberId) {
+    showToast('ID de miembro inválido', 'error');
+    return;
+  }
+  
   try {
     const client = window.supabaseClient();
     if (!client) throw new Error('Supabase no disponible');
@@ -572,80 +886,48 @@ async function quickCheckin(memberId) {
       return;
     }
     
+    // Verificar membresía
     const expiryDate = new Date(member.membership_end);
     if (expiryDate < new Date()) {
       showToast(`⚠️ Membresía vencida desde ${formatDate(member.membership_end)}`, 'error');
       return;
     }
     
+    // Verificar check-in previo hoy
     const alreadyCheckedIn = await hasCheckinToday(member.id);
     if (alreadyCheckedIn) {
       showToast(`⚠️ ${member.name} ya registró asistencia hoy`, 'warning');
       return;
     }
     
+    // === INSERTAR CHECK-IN ===
     const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
-    const localDateTimeString = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-    
     const { error: checkinError } = await client
       .from('checkins')
-      .insert([{ member_id: member.id, checkin_time: localDateTimeString }]);
+      .insert([{
+        member_id: member.id,
+        checkin_time: now.toISOString()
+      }]);
     
     if (checkinError) throw checkinError;
     
-    await client.from('members').update({ last_checkin: localDateTimeString }).eq('id', member.id);
+    // Actualizar último check-in
+    await client
+      .from('members')
+      .update({ last_checkin: now.toISOString() })
+      .eq('id', member.id);
     
-    showToast(`✅ Check-in rápido: ${member.name}`);
-    await loadTodayCheckins();
-    await loadDashboardData();
+    showToast(`✅ Check-in rápido: ${member.name}`, 'success');
     
+    // Actualizar vistas
+    await Promise.all([
+      loadTodayCheckins(),
+      loadDashboardData()
+    ]);
+
   } catch (error) {
     console.error('Error en check-in rápido:', error);
     showToast('Error al procesar check-in', 'error');
-  }
-}
-
-async function loadTodayCheckins() {
-  try {
-    const client = window.supabaseClient();
-    if (!client) return;
-
-    const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
-
-    const { data, error } = await client
-      .from('checkins')
-      .select(`*, members (name, plan)`)
-      .gte('checkin_time', `${todayStr} 00:00:00`)
-      .lte('checkin_time', `${todayStr} 23:59:59`)
-      .order('checkin_time', { ascending: false });
-
-    if (error) throw error;
-
-    document.getElementById('todayCount').textContent = data?.length || 0;
-
-    const container = document.getElementById('todayCheckinsList');
-    if (!container) return;
-
-    if (!data || data.length === 0) {
-      container.innerHTML = `<div class="text-center py-12 text-zinc-400"><i class="fas fa-clock text-5xl mb-4 opacity-30"></i><p class="text-lg">Aún no hay check-ins hoy</p></div>`;
-      return;
-    }
-
-    container.innerHTML = data.map(c => {
-      const date = new Date(c.checkin_time);
-      const timeStr = `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
-      return `<div class="flex items-center justify-between p-4 bg-zinc-800 rounded-2xl"><div><p class="font-semibold">${escapeHtml(c.members?.name || 'Desconocido')}</p><p class="text-sm text-zinc-400">${c.members?.plan || '-'}</p></div><div class="text-emerald-400 font-medium"><i class="fas fa-clock"></i> ${timeStr}</div></div>`;
-    }).join('');
-
-  } catch (error) {
-    console.error(error);
   }
 }
 
@@ -1746,140 +2028,15 @@ function toggleMobileMenu() {
 }
 
 function closeMobileMenuOnClick() {
-  document.querySelectorAll('.w-72 nav button').forEach(link => link.addEventListener('click', () => { if (window.innerWidth <= 768) { document.querySelector('.w-72').style.left = '-100%'; document.body.style.overflow = 'auto'; } }));
-}
-
-// ============ INICIALIZACIÓN ============
-async function initializeAppData() {
-  if (isInitializing) return;
-  isInitializing = true;
-  
-  showToast('Cargando datos...', 'info');
-  try {
-    await loadDashboardData();
-    if (typeof loadMembers === 'function') await loadMembers();
-    await loadPayments();
-    await loadTodayCheckins();
-       
-    const savedView = localStorage.getItem('membersView');
-    if (savedView === 'card') { 
-      currentView = 'card'; 
-    } else { 
-      currentView = 'table'; 
-    }
-    if (typeof updateViewDisplay === 'function') updateViewDisplay();
-    
-    showToast('Datos cargados correctamente');
-  } catch (error) {
-    console.error('Error initializing app:', error);
-    showToast('Error al cargar datos', 'error');
-  } finally {
-    isInitializing = false;
-  }
-}
-
-// ============ ACTUALIZACIÓN AUTOMÁTICA DE CHECK-INS EN ADMIN ============
-async function checkForNewCheckins() {
-  try {
-    const client = window.supabaseClient();
-    if (!client) return;
-    
-    const today = new Date().toISOString().split('T')[0];
-    
-    // Verificar si cambió el día
-    const storedDate = localStorage.getItem('checkin_last_date');
-    if (storedDate !== today) {
-      // Reiniciar contador para el nuevo día
-      localStorage.setItem('checkin_last_date', today);
-      localStorage.setItem('checkin_last_count', '0');
-      lastCheckinCount = 0;
-      console.log('📅 Nuevo día detectado, contador reiniciado');
-    }
-    
-    const { count: currentCount } = await client
-      .from('checkins')
-      .select('*', { count: 'exact', head: true })
-      .gte('checkin_time', `${today} 00:00:00`)
-      .lte('checkin_time', `${today} 23:59:59`);
-    
-    console.log(`🔍 Verificando - Actual: ${currentCount}, Anterior: ${lastCheckinCount}`);
-    
-    if (currentCount !== lastCheckinCount) {
-      console.log(`🔄 NUEVO CHECK-IN! Antes: ${lastCheckinCount}, Ahora: ${currentCount}`);
-      
-      await loadTodayCheckins();
-      await loadDashboardData();
-      
-      if (currentCount > lastCheckinCount) {
-        const nuevos = currentCount - lastCheckinCount;
-        showToast(`🎉 ${nuevos} nuevo${nuevos > 1 ? 's' : ''} check-in${nuevos > 1 ? 's' : ''}!`, 'success');
+  document.querySelectorAll('.w-72 nav button').forEach(link => {
+    link.addEventListener('click', () => {
+      if (window.innerWidth <= 768) {
+        const sidebar = document.querySelector('.w-72');
+        if (sidebar) sidebar.style.left = '-100%';
+        document.body.style.overflow = 'auto';
       }
-      
-      // ✅ Guardar en localStorage para mantener el estado
-      lastCheckinCount = currentCount || 0;
-      localStorage.setItem('checkin_last_count', lastCheckinCount.toString());
-    }
-    
-  } catch (error) {
-    console.error('Error checking for new checkins:', error);
-  }
-}
-
-function startAutoRefreshCheckins() {
-  // ✅ Evitar múltiples intervalos
-  if (autoRefreshInterval) {
-    clearInterval(autoRefreshInterval);
-    autoRefreshInterval = null;
-  }
-  
-  console.log('🔄 Iniciando actualización automática de check-ins (cada 5 segundos)');
-  
-  // ✅ Función para obtener la fecha actual (YYYY-MM-DD)
-  function getTodayDate() {
-    return new Date().toISOString().split('T')[0];
-  }
-  
-  // ✅ Inicializar contador desde localStorage o Supabase
-  (async () => {
-    const client = window.supabaseClient();
-    if (client) {
-      const today = getTodayDate();
-      const storedDate = localStorage.getItem('checkin_last_date');
-      const storedCount = localStorage.getItem('checkin_last_count');
-      
-      // Si cambió el día, reiniciar contador
-      if (storedDate !== today) {
-        localStorage.setItem('checkin_last_date', today);
-        localStorage.setItem('checkin_last_count', '0');
-        lastCheckinCount = 0;
-        console.log('📅 Nuevo día detectado, contador reiniciado a 0');
-      } else if (storedCount !== null) {
-        lastCheckinCount = parseInt(storedCount) || 0;
-        console.log(`📊 Contador recuperado de localStorage: ${lastCheckinCount}`);
-      } else {
-        // Obtener desde Supabase
-        const { count } = await client
-          .from('checkins')
-          .select('*', { count: 'exact', head: true })
-          .gte('checkin_time', `${today} 00:00:00`)
-          .lte('checkin_time', `${today} 23:59:59`);
-        lastCheckinCount = count || 0;
-        localStorage.setItem('checkin_last_date', today);
-        localStorage.setItem('checkin_last_count', lastCheckinCount.toString());
-        console.log(`📊 Contador inicial desde Supabase: ${lastCheckinCount}`);
-      }
-    }
-  })();
-  
-  // Revisar cada 5 segundos
-  autoRefreshInterval = setInterval(() => {
-    const checkinPage = document.getElementById('page-checkin-list');
-    const isOnCheckinPage = checkinPage && !checkinPage.classList.contains('hidden');
-    
-    if (isOnCheckinPage) {
-      checkForNewCheckins();
-    }
-  }, 5000);
+    });
+  });
 }
 
 function getCurrentPage() {
@@ -1891,13 +2048,6 @@ function getCurrentPage() {
     }
   }
   return null;
-}
-
-function stopAutoRefreshCheckins() {
-  if (autoRefreshInterval) {
-    clearInterval(autoRefreshInterval);
-    autoRefreshInterval = null;
-  }
 }
 
 // ====================== LIMPIEZA AUTOMÁTICA DE CHECK-INS ======================
@@ -1930,6 +2080,17 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('🚀 Inicializando aplicación...');
   addMobileMenuButton();
   closeMobileMenuOnClick();
+  addRealtimeStyles(); // ← Asegúrate de tener esta función
+  
+  // Crear badge en el botón de check-ins
+  const checkinButton = document.getElementById('btn-checkin-list');
+  if (checkinButton) {
+    const badge = document.createElement('span');
+    badge.id = 'checkinBadge';
+    badge.className = 'notification-badge hidden';
+    checkinButton.style.position = 'relative';
+    checkinButton.appendChild(badge);
+  }
   
   const memberForm = document.getElementById('memberForm');
   if (memberForm) {
@@ -1965,31 +2126,50 @@ document.addEventListener('DOMContentLoaded', () => {
     if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) { if (modalId === 'memberModal' && typeof closeModal === 'function') closeModal(); if (modalId === 'paymentModal' && typeof closePaymentModal === 'function') closePaymentModal(); if (modalId === 'qrModal' && typeof closeQRModal === 'function') closeQRModal(); } });
   });
   
-  const checkAuthWithRetry = () => { if (window.supabaseReady && window.supabaseReady()) checkAuth(); else { setTimeout(checkAuthWithRetry, 500); } };
+  // ✅ AUTENTICACIÓN CON RETRY
+  const checkAuthWithRetry = () => { 
+    if (window.supabaseReady && window.supabaseReady()) checkAuth(); 
+    else { setTimeout(checkAuthWithRetry, 500); } 
+  };
   checkAuthWithRetry();
   
-  window.addEventListener('online', () => { showToast('📡 Conexión restablecida', 'success'); if (currentUser) { loadDashboardData(); if (typeof loadMembers === 'function') loadMembers(); loadPayments(); loadTodayCheckins(); } });
+  // ✅ EVENTOS DE CONEXIÓN
+  window.addEventListener('online', () => { 
+    showToast('📡 Conexión restablecida', 'success'); 
+    if (currentUser) { 
+      loadDashboardData(); 
+      if (typeof loadMembers === 'function') loadMembers(); 
+      loadPayments(); 
+      loadTodayCheckins();
+      setupRealtimeCheckins(); // Reestablecer Realtime
+    } 
+  });
+  
   window.addEventListener('offline', () => showToast('⚠️ Sin conexión a internet', 'error'));
   
- cleanOldCheckins();
-// ✅ Iniciar auto-refresh solo una vez
-startAutoRefreshCheckins();
-
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) {
-    stopAutoRefreshCheckins();
-  } else {
-    startAutoRefreshCheckins(); // Ya evita duplicados
-    // Solo actualizar si estamos en checkin
-    const checkinPage = document.getElementById('page-checkin-list');
-    if (checkinPage && !checkinPage.classList.contains('hidden')) {
-      loadTodayCheckins();
+  // ✅ LIMPIEZA AUTOMÁTICA (solo check-ins antiguos)
+  cleanOldCheckins();
+  
+  // ✅ MANEJO DE VISIBILIDAD (SIN AUTO-REFRESH)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      // Solo actualizar datos si estamos en checkin o dashboard
+      const currentPage = getCurrentPage();
+      if (currentPage === 'checkin-list' || currentPage === 'dashboard') {
+        loadTodayCheckins();
+        if (currentPage === 'dashboard') loadDashboardData();
+      }
+      
+      // Verificar estado de Realtime
+      if (checkRealtimeStatus() !== 'SUBSCRIBED') {
+        console.log('🔄 Realtime desconectado, reconectando...');
+        setupRealtimeCheckins();
+      }
     }
-  }
-});
+  });
 });
 
-// ============ EXPONER FUNCIONES GLOBALES ============
+// ============ EXPONER FUNCIONES GLOBALES (SOLO UNA VEZ) ============
 window.logout = logout;
 window.showPage = showPage;
 window.showMainApp = showMainApp;
@@ -2029,5 +2209,7 @@ window.sendWelcomeWithQR = sendWelcomeWithQR;
 window.toggleMobileMenu = toggleMobileMenu;
 window.quickCheckin = quickCheckin;
 window.stopQRScanner = stopQRScanner;
-window.startAutoRefreshCheckins = startAutoRefreshCheckins;
-window.stopAutoRefreshCheckins = stopAutoRefreshCheckins;
+// NO exponer startAutoRefreshCheckins ni stopAutoRefreshCheckins
+window.setupRealtimeCheckins = setupRealtimeCheckins;
+window.checkRealtimeStatus = checkRealtimeStatus;
+window.restartRealtime = restartRealtime;
