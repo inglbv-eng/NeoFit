@@ -1786,64 +1786,84 @@ async function checkForNewCheckins() {
     
     const today = new Date().toISOString().split('T')[0];
     
-    // Obtener cantidad actual de check-ins hoy
-    const { count: currentCount, data: currentData } = await client
+    const { count: currentCount } = await client
       .from('checkins')
-      .select('*', { count: 'exact' })
+      .select('*', { count: 'exact', head: true })
       .gte('checkin_time', `${today} 00:00:00`)
-      .lte('checkin_time', `${today} 23:59:59`);
+      .lte('checkin_time', `${today} 23:59:59`);  // ✅ CORREGIDO
     
-    // Si hay nuevos check-ins
-    if (currentCount !== lastCheckinCount && lastCheckinCount !== 0) {
-      console.log(`🔄 Nuevos check-ins detectados! Antes: ${lastCheckinCount}, Ahora: ${currentCount}`);
+    console.log(`🔍 Verificando - Actual: ${currentCount}, Anterior: ${lastCheckinCount}`);
+    
+    if (currentCount !== lastCheckinCount) {
+      console.log(`🔄 NUEVO CHECK-IN! Antes: ${lastCheckinCount}, Ahora: ${currentCount}`);
       
-      // Actualizar la interfaz
       await loadTodayCheckins();
-      await loadDashboardData();
       
-      // Mostrar notificación sutil
       if (currentCount > lastCheckinCount) {
         const nuevos = currentCount - lastCheckinCount;
-        showToast(`📢 ${nuevos} nuevo${nuevos > 1 ? 's' : ''} check-in${nuevos > 1 ? 's' : ''} registrado${nuevos > 1 ? 's' : ''}`, 'info');
+        showToast(`🎉 ${nuevos} nuevo${nuevos > 1 ? 's' : ''} check-in${nuevos > 1 ? 's' : ''}!`, 'success');
       }
+      
+      lastCheckinCount = currentCount || 0;
     }
     
-    lastCheckinCount = currentCount || 0;
-    
   } catch (error) {
-    console.error('Error checking for new checkins:', error);
+    console.error('Error:', error);
   }
 }
 
 function startAutoRefreshCheckins() {
-  if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+  // ✅ Evitar múltiples intervalos
+  if (autoRefreshInterval) {
+    console.log('⚠️ Auto-refresh ya estaba corriendo, deteniendo anterior...');
+    clearInterval(autoRefreshInterval);
+    autoRefreshInterval = null;
+  }
   
-  // Inicializar contador
+  console.log('🔄 Iniciando actualización automática de check-ins (cada 5 segundos)');
+  
+  // Inicializar contador inmediatamente
   (async () => {
     const client = window.supabaseClient();
     if (client) {
       const today = new Date().toISOString().split('T')[0];
       const { count } = await client
         .from('checkins')
-        .select('*', { count: 'exact' })
+        .select('*', { count: 'exact', head: true })
         .gte('checkin_time', `${today} 00:00:00`)
         .lte('checkin_time', `${today} 23:59:59`);
       lastCheckinCount = count || 0;
+      console.log(`📊 Contador inicial de check-ins: ${lastCheckinCount}`);
     }
   })();
   
-  // Revisar cada 8 segundos (menos de 10)
+  // Revisar cada 5 segundos
   autoRefreshInterval = setInterval(() => {
-    // Solo actualizar si estamos en dashboard o checkin-list
-    const dashboardPage = document.getElementById('page-dashboard');
+    // ✅ SOLO verificar si estamos en checkin-list
     const checkinPage = document.getElementById('page-checkin-list');
-    const isVisible = (dashboardPage && !dashboardPage.classList.contains('hidden')) ||
-                      (checkinPage && !checkinPage.classList.contains('hidden'));
+    const isOnCheckinPage = checkinPage && !checkinPage.classList.contains('hidden');
     
-    if (isVisible) {
+    if (isOnCheckinPage) {
+      console.log('🔍 Auto-refresh: estamos en Check-in, revisando...');
       checkForNewCheckins();
+    } else {
+      // No mostrar logs constantemente
+      if (autoRefreshInterval && Math.random() < 0.05) {
+        console.log('💤 Auto-refresh: pausado (no estamos en página de Check-in)');
+      }
     }
-  }, 8000); // 8 segundos
+  }, 5000);
+}
+
+function getCurrentPage() {
+  const pages = ['dashboard', 'members', 'checkin-list', 'qr-scanner', 'payments', 'whatsapp'];
+  for (const page of pages) {
+    const el = document.getElementById(`page-${page}`);
+    if (el && !el.classList.contains('hidden')) {
+      return page;
+    }
+  }
+  return null;
 }
 
 function stopAutoRefreshCheckins() {
@@ -1924,19 +1944,22 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('online', () => { showToast('📡 Conexión restablecida', 'success'); if (currentUser) { loadDashboardData(); if (typeof loadMembers === 'function') loadMembers(); loadPayments(); loadTodayCheckins(); } });
   window.addEventListener('offline', () => showToast('⚠️ Sin conexión a internet', 'error'));
   
-  cleanOldCheckins();
-  startAutoRefreshCheckins();
-  
+ cleanOldCheckins();
+// ✅ Iniciar auto-refresh solo una vez
+startAutoRefreshCheckins();
+
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     stopAutoRefreshCheckins();
   } else {
-    startAutoRefreshCheckins();
-    // Actualizar inmediatamente al volver
-    loadTodayCheckins();
-    loadDashboardData();
+    startAutoRefreshCheckins(); // Ya evita duplicados
+    // Solo actualizar si estamos en checkin
+    const checkinPage = document.getElementById('page-checkin-list');
+    if (checkinPage && !checkinPage.classList.contains('hidden')) {
+      loadTodayCheckins();
+    }
   }
-  });
+});
 });
 
 // ============ EXPONER FUNCIONES GLOBALES ============
