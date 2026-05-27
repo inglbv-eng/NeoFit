@@ -2067,6 +2067,45 @@ function closeMobileMenuOnClick() {
   });
 }
 
+// ============ RESETEO AUTOMÁTICO A MEDIANOCHE ============
+let fechaActual = new Date().toISOString().split('T')[0];
+
+function verificarCambioDeDia() {
+  const hoy = new Date().toISOString().split('T')[0];
+  
+  if (hoy !== fechaActual) {
+    console.log(`📅 Cambio de día detectado: ${fechaActual} → ${hoy}`);
+    fechaActual = hoy;
+    
+    // Resetear la vista de check-ins
+    const container = document.getElementById('todayCheckinsList');
+    if (container) {
+      container.innerHTML = `<div class="text-center py-12 text-zinc-400">
+        <i class="fas fa-clock text-5xl mb-4 opacity-30"></i>
+        <p class="text-lg">Aún no hay check-ins hoy</p>
+      </div>`;
+    }
+    
+    const todayCountEl = document.getElementById('todayCount');
+    if (todayCountEl) todayCountEl.textContent = '0';
+    
+    // Limpiar badge
+    const badgeElement = document.getElementById('checkinBadge');
+    if (badgeElement) badgeElement.classList.add('hidden');
+    
+    // Limpiar localStorage para el nuevo día
+    localStorage.removeItem(`checkin_count_${hoy}`);
+    
+    // Recargar datos del dashboard
+    loadDashboardData();
+    
+    showToast('📅 Nuevo día - Los check-ins se han reiniciado', 'info');
+  }
+}
+
+// Verificar cambio de día cada 10 segundos
+setInterval(verificarCambioDeDia, 10000);
+
 function getCurrentPage() {
   const pages = ['dashboard', 'members', 'checkin-list', 'qr-scanner', 'payments', 'whatsapp'];
   for (const page of pages) {
